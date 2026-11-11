@@ -43,9 +43,20 @@ function generateRoomCode() {
   return 'STAR' + Math.floor(10 + Math.random() * 89);
 }
 
+const ASTRONAUT_NAMES = [
+  'Apollo', 'Comet', 'Nebula', 'Pulsar', 'Quasar',
+  'Zephyr', 'Orbit', 'Stellar', 'Meteor', 'Solstice',
+  'Eclipse', 'Zenith', 'Voyager', 'Titan', 'Halley',
+  'Cassini', 'Kepler', 'Aurora', 'Photon', 'Rigel'
+];
+
+function pickRandomAstronautName() {
+  return ASTRONAUT_NAMES[Math.floor(Math.random() * ASTRONAUT_NAMES.length)];
+}
+
 function sanitizeName(raw) {
   const cleaned = String(raw || '').replace(/[^\w\s\-]/g, '').trim().slice(0, 12);
-  return cleaned || 'Astronaut';
+  return cleaned || pickRandomAstronautName();
 }
 
 // ============================================================================

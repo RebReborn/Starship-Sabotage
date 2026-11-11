@@ -967,7 +967,7 @@
       <div class="lobby-grid">
         <div class="config-group">
           <label>Your Astronaut Name</label>
-          <input type="text" id="playerNameInput" class="text-input" value="Captain" maxlength="12" />
+          <input type="text" id="playerNameInput" class="text-input" value="" placeholder="Astronaut Name" maxlength="12" />
 
           <label>Total Crew Size (1 Human + AI Bots)</label>
           <select id="botCountSelect" class="select-input">
@@ -1174,6 +1174,16 @@
   ];
 
   const BOT_NAMES = ['Nova', 'Orion', 'Vega', 'Luna', 'Atlas', 'Cosmo', 'Lyra', 'Draco'];
+  const ASTRONAUT_NAMES = [
+    'Apollo', 'Comet', 'Nebula', 'Pulsar', 'Quasar',
+    'Zephyr', 'Orbit', 'Stellar', 'Meteor', 'Solstice',
+    'Eclipse', 'Zenith', 'Voyager', 'Titan', 'Halley',
+    'Cassini', 'Kepler', 'Aurora', 'Photon', 'Rigel'
+  ];
+
+  function pickRandomAstronautName() {
+    return ASTRONAUT_NAMES[Math.floor(Math.random() * ASTRONAUT_NAMES.length)];
+  }
 
   // Cached DOM Elements (#31)
   const DOM = {
@@ -2382,6 +2392,7 @@
       }, 1200);
     }
   });
+  DOM.playerNameInput.value = pickRandomAstronautName();
   DOM.playerNameInput.addEventListener('change', () => NetEngine.updateProfile());
   NetEngine.init();
 
@@ -2390,7 +2401,7 @@
   // ============================================================================
   function sanitizeName(raw) {
     const cleaned = String(raw || '').replace(/[^\w\s\-]/g, '').trim().slice(0, 12);
-    return cleaned || 'Captain';
+    return cleaned || pickRandomAstronautName();
   }
 
   function setupLocalPlayerHUD() {
@@ -2486,6 +2497,9 @@
       usedColorIndices.add(h.colorIdx);
     }
 
+    const humanNamesLower = new Set(connectedHumans.map(h => String(h.name || '').toLowerCase()));
+    const availableBotNames = BOT_NAMES.filter(n => !humanNamesLower.has(n.toLowerCase()));
+    const botNamePool = availableBotNames.length > 0 ? availableBotNames : BOT_NAMES;
     const botColors = SUIT_COLORS.filter((_, idx) => !usedColorIndices.has(idx));
     let botColorCursor = 0;
     let botNameCursor = 0;
@@ -2497,7 +2511,7 @@
       const col = isHuman
         ? (SUIT_COLORS[humanSlot.colorIdx] || SUIT_COLORS[0])
         : (botColors[botColorCursor++] || SUIT_COLORS[i % SUIT_COLORS.length]);
-      const pName = isHuman ? humanSlot.name : BOT_NAMES[botNameCursor++ % BOT_NAMES.length];
+      const pName = isHuman ? humanSlot.name : botNamePool[botNameCursor++ % botNamePool.length];
 
       const angle = (i / totalCount) * Math.PI * 2;
       const sx = 1200 + Math.cos(angle) * 145;
