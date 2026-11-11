@@ -49,8 +49,10 @@ function sanitizeName(raw) {
 // ============================================================================
 // 1. NATIVE RFC 6455 WEBSOCKET FRAME ENCODER & DECODER
 // ============================================================================
-function encodeWsFrame(payloadStr, opcode = 0x01) {
-  const payload = Buffer.from(payloadStr, 'utf8');
+function encodeWsFrame(payloadData, opcode = 0x01) {
+  const payload = Buffer.isBuffer(payloadData)
+    ? payloadData
+    : Buffer.from(String(payloadData), 'utf8');
   const len = payload.length;
   let header;
 
@@ -163,6 +165,11 @@ function handleClientMessage(client, msg) {
   if (!msg || typeof msg !== 'object') return;
 
   switch (msg.type) {
+    case 'PING': {
+      sendJson(client, { type: 'PONG' });
+      break;
+    }
+
     case 'CREATE_ROOM': {
       removeClientFromRoom(client);
       const code = generateRoomCode();
@@ -395,6 +402,17 @@ server.on('upgrade', (req, socket) => {
   };
 
   let recvBuffer = Buffer.alloc(0);
+  let fragmentOpcode = null;
+  let fragmentChunks = [];
+  let fragmentBytes = 0;
+  const MAX_WS_MESSAGE_BYTES = 1024 * 1024;
+
+  const dispatchTextPayload = (buf) => {
+    try {
+      const parsed = JSON.parse(buf.toString('utf8'));
+      handleClientMessage(client, parsed);
+    } catch (_) {}
+  };
 
   socket.on('data', (chunk) => {
     recvBuffer = Buffer.concat([recvBuffer, chunk]);
@@ -402,6 +420,7 @@ server.on('upgrade', (req, socket) => {
     while (recvBuffer.length >= 2) {
       const firstByte = recvBuffer[0];
       const secondByte = recvBuffer[1];
+      const fin = (firstByte & 0x80) !== 0;
       const opcode = firstByte & 0x0f;
       const isMasked = (secondByte & 0x80) !== 0;
       let payloadLen = secondByte & 0x7f;
@@ -415,6 +434,13 @@ server.on('upgrade', (req, socket) => {
         if (recvBuffer.length < 10) return;
         payloadLen = Number(recvBuffer.readBigUInt64BE(2));
         offset = 10;
+      }
+
+      if (payloadLen > MAX_WS_MESSAGE_BYTES) {
+        client.closed = true;
+        removeClientFromRoom(client);
+        socket.destroy();
+        return;
       }
 
       const maskLen = isMasked ? 4 : 0;
@@ -441,14 +467,38 @@ server.on('upgrade', (req, socket) => {
         socket.end();
         return;
       } else if (opcode === 0x09) {
-        // Ping -> Pong
-        if (socket.writable) socket.write(encodeWsFrame(payload.toString('utf8'), 0x0a));
-      } else if (opcode === 0x01) {
-        // Text frame
-        try {
-          const parsed = JSON.parse(payload.toString('utf8'));
-          handleClientMessage(client, parsed);
-        } catch (_) {}
+        // Ping -> Pong (RFC 6455 allows control frames between fragments)
+        if (socket.writable) socket.write(encodeWsFrame(payload, 0x0a));
+      } else if (opcode === 0x0a) {
+        // Pong (no-op)
+      } else if (opcode === 0x01 || opcode === 0x02) {
+        if (fin) {
+          fragmentOpcode = null;
+          fragmentChunks = [];
+          fragmentBytes = 0;
+          if (opcode === 0x01) dispatchTextPayload(payload);
+        } else {
+          fragmentOpcode = opcode;
+          fragmentChunks = [Buffer.from(payload)];
+          fragmentBytes = payload.length;
+        }
+      } else if (opcode === 0x00 && fragmentOpcode !== null) {
+        fragmentBytes += payload.length;
+        if (fragmentBytes > MAX_WS_MESSAGE_BYTES) {
+          client.closed = true;
+          removeClientFromRoom(client);
+          socket.destroy();
+          return;
+        }
+        fragmentChunks.push(Buffer.from(payload));
+        if (fin) {
+          const fullPayload = Buffer.concat(fragmentChunks);
+          const origOpcode = fragmentOpcode;
+          fragmentOpcode = null;
+          fragmentChunks = [];
+          fragmentBytes = 0;
+          if (origOpcode === 0x01) dispatchTextPayload(fullPayload);
+        }
       }
     }
   });

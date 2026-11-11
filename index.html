@@ -1657,7 +1657,11 @@
   const NetEngine = {
     ws: null,
     bc: null,
+    wsUrl: null,
     wsConnected: false,
+    wsConnecting: false,
+    pingTimer: null,
+    reconnectTimer: null,
     inRoom: false,
     roomCode: null,
     mySlotId: 0,
@@ -1731,13 +1735,34 @@
         this.updateStatusUI();
         return;
       }
+      this.wsUrl = wsUrl;
+      this.connectSocket();
+    },
+
+    connectSocket() {
+      if (!this.wsUrl || typeof WebSocket === 'undefined') return;
+      if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+
+      this.wsConnecting = true;
+      this.updateStatusUI();
 
       try {
-        const socket = new WebSocket(wsUrl);
+        const socket = new WebSocket(this.wsUrl);
         this.ws = socket;
         socket.onopen = () => {
           this.wsConnected = true;
+          this.wsConnecting = false;
           this.updateStatusUI();
+          if (this.pingTimer) clearInterval(this.pingTimer);
+          this.pingTimer = setInterval(() => {
+            if (this.ws && this.ws.readyState === 1) {
+              this.ws.send('{"type":"PING"}');
+            }
+          }, 25000);
         };
         socket.onmessage = (ev) => {
           try {
@@ -1746,16 +1771,42 @@
           } catch (_) {}
         };
         socket.onclose = () => {
+          if (this.pingTimer) {
+            clearInterval(this.pingTimer);
+            this.pingTimer = null;
+          }
+          const wasInWsRoom = this.inRoom && !this.bc;
           this.wsConnected = false;
+          this.wsConnecting = false;
           this.ws = null;
-          this.updateStatusUI();
+          if (wasInWsRoom) {
+            this.inRoom = false;
+            this.roomCode = null;
+            this.mySlotId = 0;
+            this.hostSlotId = 0;
+            this.roster = [];
+            localPlayerId = 0;
+            this.updateLobbyUI();
+            if (DOM.mpStatusSub) {
+              DOM.mpStatusSub.style.color = '#f87171';
+              DOM.mpStatusSub.textContent = 'Lost connection to server. Reconnecting...';
+            }
+          } else {
+            this.updateStatusUI();
+          }
+          if (!this.reconnectTimer) {
+            this.reconnectTimer = setTimeout(() => {
+              this.reconnectTimer = null;
+              this.connectSocket();
+            }, 3000);
+          }
         };
         socket.onerror = () => {
           this.wsConnected = false;
-          this.updateStatusUI();
         };
       } catch (_) {
         this.wsConnected = false;
+        this.wsConnecting = false;
         this.updateStatusUI();
       }
     },
@@ -1946,9 +1997,12 @@
       if (this.wsConnected) {
         DOM.mpServerStatus.style.color = '#4ade80';
         DOM.mpServerStatus.textContent = '● Dedicated WS Server Online';
+      } else if (this.wsConnecting) {
+        DOM.mpServerStatus.style.color = '#38bdf8';
+        DOM.mpServerStatus.textContent = '● Connecting to Online Server...';
       } else {
         DOM.mpServerStatus.style.color = '#fbbf24';
-        DOM.mpServerStatus.textContent = '● Multi-Tab Mode (Run "node server.js" for WS Server)';
+        DOM.mpServerStatus.textContent = '● Multi-Tab Mode (Reconnecting to Online Server...)';
       }
     },
 
