@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: starship-sabotage
+    runtime: node
+    plan: free
+    buildCommand: echo "No dependencies to install"
+    startCommand: node server.js
+    healthCheckPath: /
+    autoDeploy: true
