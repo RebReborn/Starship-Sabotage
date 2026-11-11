@@ -1650,6 +1650,9 @@
 
   // ============================================================================
   // 3B. ONLINE MULTIPLAYER ENGINE (WebSocket Server + Local Multi-Tab Fallback)
+  // Set this to your deployed server.js URL (e.g. 'wss://starship-sabotage.up.railway.app')
+  // when the page is served from a static host like Netlify.
+  const DEFAULT_GAME_SERVER_URL = '';
   // ============================================================================
   const NetEngine = {
     ws: null,
@@ -1712,9 +1715,22 @@
       }
       const isHttp = window.location && (window.location.protocol === 'http:' || window.location.protocol === 'https:');
       const wsProto = window.location && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = isHttp && window.location.host
-        ? `${wsProto}//${window.location.host}`
-        : 'ws://localhost:8080';
+      // Static hosts (Netlify, GitHub Pages, Vercel static) cannot run server.js.
+      // In that case, point to the separately hosted game server via ?server=wss://... or STARSHIP_SERVER_URL.
+      const STATIC_HOST_PATTERN = /(netlify\.app|github\.io|vercel\.app|pages\.dev)$/i;
+      const queryServer = new URLSearchParams(window.location.search || '').get('server');
+      const isStaticHost = isHttp && STATIC_HOST_PATTERN.test(window.location.hostname || '');
+      const wsUrl = queryServer
+        || window.STARSHIP_SERVER_URL
+        || (isStaticHost
+          ? DEFAULT_GAME_SERVER_URL
+          : (isHttp && window.location.host
+            ? `${wsProto}//${window.location.host}`
+            : 'ws://localhost:8080'));
+      if (!wsUrl) {
+        this.updateStatusUI();
+        return;
+      }
 
       try {
         const socket = new WebSocket(wsUrl);
