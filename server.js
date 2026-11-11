@@ -26,8 +26,10 @@ const PORT = parseInt(process.env.PORT || '8080', 10);
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 const INDEX_PATH = path.join(__dirname, 'index.html');
 
-// Active rooms: code -> { code, hostSlotId, state, clients: Map<slotId, Client>, matchRoles: Map<slotId, { isImpostor, alive, lastKillTime }> }
+// Active rooms: code -> { code, hostSlotId, isPublic, state, clients: Map<slotId, Client>, matchRoles: Map<slotId, { isImpostor, alive, lastKillTime }> }
 const rooms = new Map();
+// All connected WebSocket clients (used to broadcast public room list updates to lobby browsers)
+const allClients = new Set();
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -91,7 +93,7 @@ function broadcastRoom(room, obj, excludeSlotId = null) {
     if (slotId !== excludeSlotId && !member.closed && member.socket.writable) {
       try {
         member.socket.write(rawFrame);
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 }
@@ -114,8 +116,39 @@ function getRoomRosterPayload(room) {
     type: 'ROOM_ROSTER',
     roomCode: room.code,
     hostSlotId: room.hostSlotId,
+    isPublic: Boolean(room.isPublic),
     members
   };
+}
+
+function getPublicRoomsPayload() {
+  const list = [];
+  for (const room of rooms.values()) {
+    if (!room.isPublic || room.state !== 'LOBBY' || room.clients.size >= 8) continue;
+    const hostClient = room.clients.get(room.hostSlotId);
+    list.push({
+      code: room.code,
+      hostName: hostClient ? hostClient.name : 'Host',
+      playerCount: room.clients.size,
+      maxPlayers: 8
+    });
+  }
+  return {
+    type: 'PUBLIC_ROOMS',
+    rooms: list
+  };
+}
+
+function broadcastPublicRooms() {
+  const payload = getPublicRoomsPayload();
+  const rawFrame = encodeWsFrame(JSON.stringify(payload), 0x01);
+  for (const c of allClients) {
+    if (!c.closed && !c.roomCode && c.socket.writable) {
+      try {
+        c.socket.write(rawFrame);
+      } catch (_) {}
+    }
+  }
 }
 
 function pickAvailableColor(room, preferredIdx) {
@@ -143,6 +176,7 @@ function removeClientFromRoom(client) {
 
   if (room.clients.size === 0) {
     rooms.delete(code);
+    if (room.isPublic) broadcastPublicRooms();
     return;
   }
 
@@ -159,6 +193,7 @@ function removeClientFromRoom(client) {
     newHostSlotId: room.hostSlotId
   });
   broadcastRoom(room, getRoomRosterPayload(room));
+  if (room.isPublic) broadcastPublicRooms();
 }
 
 function handleClientMessage(client, msg) {
@@ -167,6 +202,11 @@ function handleClientMessage(client, msg) {
   switch (msg.type) {
     case 'PING': {
       sendJson(client, { type: 'PONG' });
+      break;
+    }
+
+    case 'LIST_PUBLIC_ROOMS': {
+      sendJson(client, getPublicRoomsPayload());
       break;
     }
 
@@ -181,6 +221,7 @@ function handleClientMessage(client, msg) {
       const room = {
         code,
         hostSlotId: 0,
+        isPublic: Boolean(msg.isPublic),
         state: 'LOBBY',
         clients: new Map([[0, client]]),
         matchRoles: new Map()
@@ -192,9 +233,11 @@ function handleClientMessage(client, msg) {
         roomCode: code,
         slotId: 0,
         hostSlotId: 0,
+        isPublic: room.isPublic,
         colorIdx: client.colorIdx
       });
       broadcastRoom(room, getRoomRosterPayload(room));
+      if (room.isPublic) broadcastPublicRooms();
       break;
     }
 
@@ -230,9 +273,20 @@ function handleClientMessage(client, msg) {
         roomCode: code,
         slotId: assignedSlot,
         hostSlotId: room.hostSlotId,
+        isPublic: room.isPublic,
         colorIdx: client.colorIdx
       });
       broadcastRoom(room, getRoomRosterPayload(room));
+      if (room.isPublic) broadcastPublicRooms();
+      break;
+    }
+
+    case 'SET_ROOM_VISIBILITY': {
+      const room = rooms.get(client.roomCode);
+      if (!room || client.slotId !== room.hostSlotId) return;
+      room.isPublic = Boolean(msg.isPublic);
+      broadcastRoom(room, getRoomRosterPayload(room));
+      broadcastPublicRooms();
       break;
     }
 
@@ -250,12 +304,14 @@ function handleClientMessage(client, msg) {
         }
       }
       broadcastRoom(room, getRoomRosterPayload(room));
+      if (room.isPublic) broadcastPublicRooms();
       break;
     }
 
     case 'LEAVE_ROOM': {
       removeClientFromRoom(client);
       sendJson(client, { type: 'ROOM_LEFT' });
+      sendJson(client, getPublicRoomsPayload());
       break;
     }
 
@@ -275,6 +331,7 @@ function handleClientMessage(client, msg) {
         }
       }
       broadcastRoom(room, msg, client.slotId);
+      if (room.isPublic) broadcastPublicRooms();
       break;
     }
 
@@ -284,6 +341,7 @@ function handleClientMessage(client, msg) {
       room.state = 'LOBBY';
       room.matchRoles.clear();
       broadcastRoom(room, { type: 'RETURN_LOBBY' }, client.slotId);
+      if (room.isPublic) broadcastPublicRooms();
       break;
     }
 
@@ -400,6 +458,7 @@ server.on('upgrade', (req, socket) => {
     name: 'Astronaut',
     colorIdx: 0
   };
+  allClients.add(client);
 
   let recvBuffer = Buffer.alloc(0);
   let fragmentOpcode = null;
@@ -411,7 +470,7 @@ server.on('upgrade', (req, socket) => {
     try {
       const parsed = JSON.parse(buf.toString('utf8'));
       handleClientMessage(client, parsed);
-    } catch (_) {}
+    } catch (_) { }
   };
 
   socket.on('data', (chunk) => {
@@ -437,8 +496,7 @@ server.on('upgrade', (req, socket) => {
       }
 
       if (payloadLen > MAX_WS_MESSAGE_BYTES) {
-        client.closed = true;
-        removeClientFromRoom(client);
+        cleanup();
         socket.destroy();
         return;
       }
@@ -461,8 +519,7 @@ server.on('upgrade', (req, socket) => {
 
       if (opcode === 0x08) {
         // Close frame
-        client.closed = true;
-        removeClientFromRoom(client);
+        cleanup();
         if (socket.writable) socket.write(Buffer.from([0x88, 0x00]));
         socket.end();
         return;
@@ -485,8 +542,7 @@ server.on('upgrade', (req, socket) => {
       } else if (opcode === 0x00 && fragmentOpcode !== null) {
         fragmentBytes += payload.length;
         if (fragmentBytes > MAX_WS_MESSAGE_BYTES) {
-          client.closed = true;
-          removeClientFromRoom(client);
+          cleanup();
           socket.destroy();
           return;
         }
@@ -506,6 +562,7 @@ server.on('upgrade', (req, socket) => {
   const cleanup = () => {
     if (!client.closed) {
       client.closed = true;
+      allClients.delete(client);
       removeClientFromRoom(client);
     }
   };

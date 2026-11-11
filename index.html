@@ -766,6 +766,82 @@
       border-radius: 50%;
       border: 1px solid #fff;
     }
+
+    .mp-vis-btn {
+      background: #1e293b;
+      border: 1px solid #64748b;
+      color: #e2e8f0;
+    }
+
+    .mp-vis-btn.public {
+      background: linear-gradient(135deg, #047857, #065f46);
+      border-color: #34d399;
+      color: #ecfdf5;
+    }
+
+    .mp-public-wrap {
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      padding-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .mp-public-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #93c5fd;
+      letter-spacing: 0.4px;
+    }
+
+    .mp-public-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      font-size: 11.5px;
+      color: #94a3b8;
+    }
+
+    .mp-public-room {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #38bdf8;
+      color: #f8fafc;
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s, border-color 0.15s, background 0.15s;
+    }
+
+    .mp-public-room:hover {
+      background: #1e293b;
+      border-color: #4ade80;
+      transform: translateY(-1px);
+    }
+
+    .mp-public-code {
+      font-family: monospace;
+      font-weight: 900;
+      color: #fde047;
+      letter-spacing: 1px;
+    }
+
+    .mp-public-join {
+      background: #059669;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -866,6 +942,7 @@
           </div>
 
           <div class="mp-controls">
+            <button class="mp-btn mp-vis-btn" id="mpVisibilityBtn" title="Toggle whether strangers can see and join your room">🔒 PRIVATE</button>
             <button class="mp-btn" id="mpHostBtn">🌐 HOST ROOM</button>
             <input type="text" id="mpCodeInput" class="mp-code-input" placeholder="CODE" maxlength="6" />
             <button class="mp-btn" id="mpJoinBtn" style="background:linear-gradient(135deg,#059669,#047857); border-color:#34d399;">🔗 JOIN</button>
@@ -875,6 +952,15 @@
         </div>
         <div class="mp-roster" id="mpRosterList">
           <span>Mode: <b>Solo / Local Host</b> (1 Human + AI Bots fill remaining crew slots)</span>
+        </div>
+        <div class="mp-public-wrap" id="mpPublicRoomsWrap" style="display:none;">
+          <div class="mp-public-header">
+            <span>🌍 OPEN PUBLIC ROOMS</span>
+            <button class="mp-btn" id="mpRefreshRoomsBtn" style="padding:3px 8px; font-size:10.5px; background:#1e293b; border-color:#475569;">↻ Refresh</button>
+          </div>
+          <div class="mp-public-list" id="mpPublicRoomsList">
+            <span>No open public rooms right now.</span>
+          </div>
         </div>
       </div>
 
@@ -1119,12 +1205,16 @@
     lobbyOverlay: document.getElementById('lobbyOverlay'),
     mpServerStatus: document.getElementById('mpServerStatus'),
     mpStatusSub: document.getElementById('mpStatusSub'),
+    mpVisibilityBtn: document.getElementById('mpVisibilityBtn'),
     mpHostBtn: document.getElementById('mpHostBtn'),
     mpCodeInput: document.getElementById('mpCodeInput'),
     mpJoinBtn: document.getElementById('mpJoinBtn'),
     mpRoomBadge: document.getElementById('mpRoomBadge'),
     mpLeaveBtn: document.getElementById('mpLeaveBtn'),
     mpRosterList: document.getElementById('mpRosterList'),
+    mpPublicRoomsWrap: document.getElementById('mpPublicRoomsWrap'),
+    mpRefreshRoomsBtn: document.getElementById('mpRefreshRoomsBtn'),
+    mpPublicRoomsList: document.getElementById('mpPublicRoomsList'),
     playerNameInput: document.getElementById('playerNameInput'),
     botCountSelect: document.getElementById('botCountSelect'),
     rolePrefSelect: document.getElementById('rolePrefSelect'),
@@ -1663,6 +1753,8 @@
     pingTimer: null,
     reconnectTimer: null,
     inRoom: false,
+    isPublic: false,
+    publicRooms: [],
     roomCode: null,
     mySlotId: 0,
     hostSlotId: 0,
@@ -1756,7 +1848,8 @@
         socket.onopen = () => {
           this.wsConnected = true;
           this.wsConnecting = false;
-          this.updateStatusUI();
+          this.updateLobbyUI();
+          this.refreshPublicRooms();
           if (this.pingTimer) clearInterval(this.pingTimer);
           this.pingTimer = setInterval(() => {
             if (this.ws && this.ws.readyState === 1) {
@@ -1793,6 +1886,7 @@
             }
           } else {
             this.updateStatusUI();
+            this.renderPublicRooms();
           }
           if (!this.reconnectTimer) {
             this.reconnectTimer = setTimeout(() => {
@@ -1912,13 +2006,76 @@
         this.sendRaw({
           type: 'CREATE_ROOM',
           name: myName,
-          colorIdx: selectedSuitIndex
+          colorIdx: selectedSuitIndex,
+          isPublic: this.isPublic
         });
       } else {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let code = '';
         for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
         this.openLocalBroadcastRoom(code, true);
+      }
+    },
+
+    toggleRoomVisibility() {
+      SFX.beep(560);
+      const nextPublic = !this.isPublic;
+      if (!this.inRoom) {
+        this.isPublic = nextPublic;
+        this.updateLobbyUI();
+        return;
+      }
+      if (!this.isHost()) return;
+      if (this.wsConnected) {
+        this.sendRaw({ type: 'SET_ROOM_VISIBILITY', isPublic: nextPublic });
+      } else {
+        this.isPublic = nextPublic;
+        this.updateLobbyUI();
+      }
+    },
+
+    refreshPublicRooms() {
+      if (this.wsConnected && !this.inRoom) {
+        this.sendRaw({ type: 'LIST_PUBLIC_ROOMS' });
+      }
+    },
+
+    renderPublicRooms() {
+      if (!DOM.mpPublicRoomsWrap || !DOM.mpPublicRoomsList) return;
+      const showBrowser = !this.inRoom && this.wsConnected;
+      DOM.mpPublicRoomsWrap.style.display = showBrowser ? 'flex' : 'none';
+      if (!showBrowser) return;
+
+      DOM.mpPublicRoomsList.textContent = '';
+      if (!this.publicRooms || this.publicRooms.length === 0) {
+        const empty = document.createElement('span');
+        empty.textContent = 'No open public rooms right now — switch 🔒 PRIVATE to 🌍 PUBLIC and click HOST ROOM!';
+        DOM.mpPublicRoomsList.appendChild(empty);
+        return;
+      }
+
+      for (const rm of this.publicRooms) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mp-public-room';
+        btn.title = `Join ${rm.hostName}'s room (${rm.code})`;
+
+        const codeSpan = document.createElement('span');
+        codeSpan.className = 'mp-public-code';
+        codeSpan.textContent = rm.code;
+
+        const infoSpan = document.createElement('span');
+        infoSpan.textContent = `${rm.hostName} • ${rm.playerCount}/${rm.maxPlayers}`;
+
+        const joinTag = document.createElement('span');
+        joinTag.className = 'mp-public-join';
+        joinTag.textContent = 'JOIN';
+
+        btn.appendChild(codeSpan);
+        btn.appendChild(infoSpan);
+        btn.appendChild(joinTag);
+        btn.addEventListener('click', () => this.joinRoom(rm.code));
+        DOM.mpPublicRoomsList.appendChild(btn);
       }
     },
 
@@ -2008,7 +2165,13 @@
 
     updateLobbyUI() {
       this.updateStatusUI();
+      if (DOM.mpVisibilityBtn) {
+        DOM.mpVisibilityBtn.textContent = this.isPublic ? '🌍 PUBLIC' : '🔒 PRIVATE';
+        DOM.mpVisibilityBtn.classList.toggle('public', this.isPublic);
+      }
+
       if (!this.inRoom) {
+        if (DOM.mpVisibilityBtn) DOM.mpVisibilityBtn.style.display = 'inline-block';
         DOM.mpHostBtn.style.display = 'inline-block';
         DOM.mpCodeInput.style.display = 'inline-block';
         DOM.mpJoinBtn.style.display = 'inline-block';
@@ -2016,13 +2179,20 @@
         DOM.mpLeaveBtn.style.display = 'none';
         DOM.hudNetBadge.style.display = 'none';
         DOM.mpStatusSub.style.color = '#cbd5e1';
-        DOM.mpStatusSub.textContent = 'Host a 6-digit Room Code for friends or play solo with AI bots!';
+        DOM.mpStatusSub.textContent = this.isPublic
+          ? 'Public mode selected: anyone online will be able to see and join your room!'
+          : 'Host a 6-digit Room Code for friends or join an open Public Room below!';
         DOM.mpRosterList.textContent = 'Mode: Solo / Local Host (1 Human + AI Bots fill remaining crew slots)';
         DOM.startGameBtn.disabled = false;
         DOM.startGameBtn.textContent = 'LAUNCH MISSION';
+        this.renderPublicRooms();
         return;
       }
 
+      const amHost = this.isHost();
+      if (DOM.mpVisibilityBtn) {
+        DOM.mpVisibilityBtn.style.display = (amHost && this.wsConnected) ? 'inline-block' : 'none';
+      }
       DOM.mpHostBtn.style.display = 'none';
       DOM.mpCodeInput.style.display = 'none';
       DOM.mpJoinBtn.style.display = 'none';
@@ -2033,16 +2203,17 @@
       DOM.hudNetBadge.style.display = 'block';
       DOM.hudNetBadge.textContent = `🌐 ROOM: ${this.roomCode} (${this.roster.length} Human${this.roster.length === 1 ? '' : 's'})`;
 
-      const amHost = this.isHost();
+      const visTag = this.isPublic ? 'Public' : 'Private';
       DOM.mpStatusSub.style.color = '#6ee7b7';
       DOM.mpStatusSub.textContent = amHost
-        ? `You are the Room Host! Share code [${this.roomCode}] with friends, then click LAUNCH MISSION.`
-        : `Connected to Room [${this.roomCode}] as Player #${this.mySlotId + 1}. Waiting for Host to launch...`;
+        ? `You are the Room Host (${visTag})! ${this.isPublic ? 'Listed publicly — or share' : 'Share'} code [${this.roomCode}], then click LAUNCH MISSION.`
+        : `Connected to ${visTag} Room [${this.roomCode}] as Player #${this.mySlotId + 1}. Waiting for Host to launch...`;
 
       DOM.startGameBtn.disabled = !amHost;
       DOM.startGameBtn.textContent = amHost
         ? `LAUNCH ONLINE MISSION (${this.roster.length} HUMAN + AI BOTS)`
         : 'WAITING FOR HOST TO LAUNCH...';
+      this.renderPublicRooms();
 
       DOM.mpRosterList.textContent = '';
       const label = document.createElement('span');
@@ -2068,11 +2239,18 @@
       if (!msg || typeof msg !== 'object') return;
 
       switch (msg.type) {
+        case 'PUBLIC_ROOMS': {
+          this.publicRooms = Array.isArray(msg.rooms) ? msg.rooms : [];
+          this.renderPublicRooms();
+          break;
+        }
+
         case 'ROOM_JOINED': {
           this.inRoom = true;
           this.roomCode = msg.roomCode;
           this.mySlotId = msg.slotId;
           this.hostSlotId = msg.hostSlotId;
+          this.isPublic = Boolean(msg.isPublic);
           localPlayerId = msg.slotId;
           if (msg.colorIdx !== undefined) {
             selectSuitSwatch(msg.colorIdx, false);
@@ -2085,6 +2263,9 @@
           this.inRoom = true;
           this.roomCode = msg.roomCode;
           this.hostSlotId = msg.hostSlotId;
+          if (msg.isPublic !== undefined) {
+            this.isPublic = Boolean(msg.isPublic);
+          }
           this.roster = msg.members || [];
           const me = this.roster.find(r => r.slotId === this.mySlotId);
           if (me && me.colorIdx !== selectedSuitIndex) {
@@ -2181,6 +2362,11 @@
     }
   };
 
+  DOM.mpVisibilityBtn.addEventListener('click', () => NetEngine.toggleRoomVisibility());
+  DOM.mpRefreshRoomsBtn.addEventListener('click', () => {
+    SFX.beep(520);
+    NetEngine.refreshPublicRooms();
+  });
   DOM.mpHostBtn.addEventListener('click', () => NetEngine.createRoom());
   DOM.mpJoinBtn.addEventListener('click', () => NetEngine.joinRoom(DOM.mpCodeInput.value));
   DOM.mpCodeInput.addEventListener('keydown', (e) => {
