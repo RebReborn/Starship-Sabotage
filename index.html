@@ -316,6 +316,63 @@
       box-shadow: 0 0 12px rgba(255,255,255,0.6);
     }
 
+    .hat-swatches {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 7px;
+      max-height: 140px;
+      overflow-y: auto;
+      padding: 6px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid #334155;
+      border-radius: 8px;
+    }
+
+    .hat-item {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1e293b;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 20px;
+      transition: transform 0.1s, border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+
+    .hat-item:hover {
+      background: #334155;
+      transform: translateY(-2px);
+    }
+
+    .hat-item.selected {
+      border-color: #38bdf8;
+      background: #0f2744;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+      transform: scale(1.06);
+    }
+
+    .char-preview-box {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+    }
+
+    .char-preview-canvas {
+      width: 75px;
+      height: 80px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
     .select-input, .text-input {
       width: 100%;
       padding: 10px 12px;
@@ -969,6 +1026,15 @@
           <label>Your Astronaut Name</label>
           <input type="text" id="playerNameInput" class="text-input" value="" placeholder="Astronaut Name" maxlength="12" />
 
+          <div class="char-preview-box">
+            <canvas id="lobbyPreviewCanvas" width="90" height="96" class="char-preview-canvas"></canvas>
+            <div style="display:flex; flex-direction:column; gap:3px;">
+              <div style="font-size:10px; font-weight:800; color:#38bdf8; letter-spacing:1px; text-transform:uppercase;">Custom Outfit</div>
+              <div id="previewNameLabel" style="font-size:15px; font-weight:900; color:#f8fafc;">Astronaut</div>
+              <div id="previewOutfitLabel" style="font-size:11.5px; color:#94a3b8; font-weight:700;">Red • 🚫 No Hat</div>
+            </div>
+          </div>
+
           <label>Total Crew Size (1 Human + AI Bots)</label>
           <select id="botCountSelect" class="select-input">
             <option value="5">5 Players (1 Impostor)</option>
@@ -1028,6 +1094,9 @@
         <div class="config-group">
           <label>Select Suit Color</label>
           <div class="color-swatches" id="colorSwatches"></div>
+
+          <label style="margin-top:14px;">Select Hat & Headwear</label>
+          <div class="hat-swatches" id="hatSwatches"></div>
 
           <div style="margin-top:14px; display:flex; flex-direction:column; gap:6px; font-size:12px; color:#cbd5e1;">
             <label style="display:flex; align-items:center; gap:8px; margin:0; text-transform:none; color:#e2e8f0; cursor:pointer;">
@@ -1185,6 +1254,23 @@
     return ASTRONAUT_NAMES[Math.floor(Math.random() * ASTRONAUT_NAMES.length)];
   }
 
+  const HATS = [
+    { id: 'none',    name: 'No Hat',        icon: '🚫' },
+    { id: 'captain', name: 'Captain Cap',   icon: '👨‍✈️' },
+    { id: 'crown',   name: 'Royal Crown',   icon: '👑' },
+    { id: 'antenna', name: 'Alien Antenna', icon: '📡' },
+    { id: 'sprout',  name: 'Plant Sprout',  icon: '🌿' },
+    { id: 'dum',     name: 'DUM Note',      icon: '🧻' },
+    { id: 'party',   name: 'Party Cone',    icon: '🥳' },
+    { id: 'halo',    name: 'Angel Halo',    icon: '😇' },
+    { id: 'egg',     name: 'Fried Egg',     icon: '🍳' },
+    { id: 'beanie',  name: 'Winter Beanie', icon: '🧶' },
+    { id: 'mini',    name: 'Mini Crewmate', icon: '👨‍🚀' },
+    { id: 'chef',    name: 'Chef Toque',    icon: '👨‍🍳' },
+    { id: 'viking',  name: 'Viking Horns',  icon: '⚔️' }
+  ];
+  const HATS_BY_ID = Object.fromEntries(HATS.map(h => [h.id, h]));
+
   // Cached DOM Elements (#31)
   const DOM = {
     canvas: document.getElementById('gameCanvas'),
@@ -1236,6 +1322,10 @@
     colorblindCheck: document.getElementById('colorblindCheck'),
     reducedMotionCheck: document.getElementById('reducedMotionCheck'),
     colorSwatches: document.getElementById('colorSwatches'),
+    hatSwatches: document.getElementById('hatSwatches'),
+    lobbyPreviewCanvas: document.getElementById('lobbyPreviewCanvas'),
+    previewNameLabel: document.getElementById('previewNameLabel'),
+    previewOutfitLabel: document.getElementById('previewOutfitLabel'),
     startGameBtn: document.getElementById('startGameBtn'),
     taskOverlay: document.getElementById('taskOverlay'),
     taskModalTitle: document.getElementById('taskModalTitle'),
@@ -1633,6 +1723,7 @@
   let state = GAME_STATES.LOBBY;
   let activeModalKind = null; // 'TASK' | 'VITALS' | 'CAMERAS' | 'ADMIN' | 'SABOTAGE' | 'FIX' | 'SHAPESHIFT' (#11, #42)
   let selectedSuitIndex = 0;
+  let selectedHatId = 'none';
   let localPlayerId = 0;
   let players = [];
   let deadBodies = [];
@@ -1683,8 +1774,8 @@
   // Cutscene & Ejection animations + reusable dummy objects (#18)
   let killCutscene = null;
   let ejectionAnim = null;
-  const cutsceneDummyKiller = { id: -10, name: '', color: SUIT_COLORS[0], alive: true, facing: 1, vx: 0, vy: 0, walkPhase: 0, idlePhase: 0 };
-  const cutsceneDummyVictim = { id: -11, name: '', color: SUIT_COLORS[1], alive: true, facing: -1, vx: 0, vy: 0, walkPhase: 0, idlePhase: 0 };
+  const cutsceneDummyKiller = { id: -10, name: '', color: SUIT_COLORS[0], hatId: 'none', alive: true, facing: 1, vx: 0, vy: 0, walkPhase: 0, idlePhase: 0 };
+  const cutsceneDummyVictim = { id: -11, name: '', color: SUIT_COLORS[1], hatId: 'none', alive: true, facing: -1, vx: 0, vy: 0, walkPhase: 0, idlePhase: 0 };
 
   // Meeting state
   let meetingData = null;
@@ -1727,11 +1818,66 @@
 
   function selectSuitSwatch(idx, notifyNet = true) {
     selectedSuitIndex = idx;
+    try { localStorage.setItem('starship_color', String(idx)); } catch (_) {}
     document.querySelectorAll('.swatch').forEach((el, i) => {
       el.classList.toggle('selected', i === idx);
     });
+    updateLobbyCharacterPreview();
     if (notifyNet && NetEngine.inRoom) {
       NetEngine.updateProfile();
+    }
+  }
+
+  function selectHat(id, notifyNet = true) {
+    if (!HATS_BY_ID[id]) id = 'none';
+    selectedHatId = id;
+    try { localStorage.setItem('starship_hat', id); } catch (_) {}
+    document.querySelectorAll('.hat-item').forEach((el) => {
+      el.classList.toggle('selected', el.getAttribute('data-hat') === id);
+    });
+    updateLobbyCharacterPreview();
+    if (notifyNet && NetEngine.inRoom) {
+      NetEngine.updateProfile();
+    }
+  }
+
+  function updateLobbyCharacterPreview() {
+    if (!DOM.lobbyPreviewCanvas) return;
+    const pctx = DOM.lobbyPreviewCanvas.getContext('2d');
+    pctx.clearRect(0, 0, DOM.lobbyPreviewCanvas.width, DOM.lobbyPreviewCanvas.height);
+
+    const col = SUIT_COLORS[selectedSuitIndex] || SUIT_COLORS[0];
+    const previewName = DOM.playerNameInput && DOM.playerNameInput.value.trim()
+      ? DOM.playerNameInput.value.trim()
+      : 'Astronaut';
+
+    const previewPlayer = {
+      id: -99,
+      name: previewName,
+      color: col,
+      hatId: selectedHatId,
+      alive: true,
+      vx: 0,
+      vy: 0,
+      facing: 1,
+      walkPhase: 0,
+      idlePhase: performance.now() * 0.003,
+      fakingTaskPulse: 0,
+      disguiseColor: null,
+      disguiseName: null,
+      disguiseHat: null
+    };
+
+    pctx.save();
+    drawAstronaut(pctx, previewPlayer, 45, 58, 1.25);
+    pctx.restore();
+
+    if (DOM.previewNameLabel) {
+      DOM.previewNameLabel.textContent = previewName;
+    }
+    if (DOM.previewOutfitLabel) {
+      const hatMeta = HATS_BY_ID[selectedHatId] || HATS[0];
+      DOM.previewOutfitLabel.textContent = `${col.name} • ${hatMeta.icon} ${hatMeta.name}`;
     }
   }
 
@@ -1747,6 +1893,44 @@
     });
     DOM.colorSwatches.appendChild(div);
   });
+
+  // Setup Lobby Hat Swatches
+  if (DOM.hatSwatches) {
+    HATS.forEach((hat) => {
+      const btn = document.createElement('div');
+      btn.className = 'hat-item' + (hat.id === selectedHatId ? ' selected' : '');
+      btn.setAttribute('data-hat', hat.id);
+      btn.title = hat.name;
+      btn.textContent = hat.icon;
+      btn.addEventListener('click', () => {
+        SFX.beep(580);
+        selectHat(hat.id, true);
+      });
+      DOM.hatSwatches.appendChild(btn);
+    });
+  }
+
+  try {
+    const savedName = localStorage.getItem('starship_name');
+    if (savedName && savedName.trim()) {
+      DOM.playerNameInput.value = sanitizeName(savedName);
+    }
+    const savedColor = parseInt(localStorage.getItem('starship_color'), 10);
+    if (!isNaN(savedColor) && savedColor >= 0 && savedColor < SUIT_COLORS.length) {
+      selectedSuitIndex = savedColor;
+      document.querySelectorAll('.swatch').forEach((el, i) => {
+        el.classList.toggle('selected', i === savedColor);
+      });
+    }
+    const savedHat = localStorage.getItem('starship_hat');
+    if (savedHat && HATS_BY_ID[savedHat]) {
+      selectedHatId = savedHat;
+      document.querySelectorAll('.hat-item').forEach((el) => {
+        el.classList.toggle('selected', el.getAttribute('data-hat') === savedHat);
+      });
+    }
+  } catch (_) {}
+  updateLobbyCharacterPreview();
 
   // ============================================================================
   // 3B. ONLINE MULTIPLAYER ENGINE (WebSocket Server + Local Multi-Tab Fallback)
@@ -1947,14 +2131,15 @@
       if (asHost) {
         this.mySlotId = 0;
         localPlayerId = 0;
-        this.roster = [{ slotId: 0, name: myName, colorIdx: selectedSuitIndex, isHost: true }];
+        this.roster = [{ slotId: 0, name: myName, colorIdx: selectedSuitIndex, hatId: selectedHatId, isHost: true }];
         this.updateLobbyUI();
       } else {
         this.mySlotId = -1;
         this.bc.postMessage({
           type: 'BC_JOIN_REQ',
           name: myName,
-          colorIdx: selectedSuitIndex
+          colorIdx: selectedSuitIndex,
+          hatId: selectedHatId
         });
       }
 
@@ -1978,6 +2163,7 @@
             slotId: nextSlot,
             name: sanitizeName(msg.name),
             colorIdx: assignedCol,
+            hatId: msg.hatId || 'none',
             isHost: false
           });
           this.bc.postMessage({
@@ -1985,6 +2171,7 @@
             targetName: msg.name,
             slotId: nextSlot,
             colorIdx: assignedCol,
+            hatId: msg.hatId || 'none',
             roster: this.roster
           });
           this.updateLobbyUI();
@@ -1992,6 +2179,7 @@
           this.mySlotId = msg.slotId;
           localPlayerId = msg.slotId;
           selectSuitSwatch(msg.colorIdx, false);
+          if (msg.hatId) selectHat(msg.hatId, false);
           this.roster = msg.roster;
           this.updateLobbyUI();
         } else if (msg.type === 'BC_PROFILE' && this.isHost()) {
@@ -1999,6 +2187,7 @@
           if (entry) {
             entry.name = sanitizeName(msg.name);
             entry.colorIdx = msg.colorIdx;
+            if (msg.hatId) entry.hatId = msg.hatId;
             this.bc.postMessage({ type: 'ROOM_ROSTER', roomCode: this.roomCode, hostSlotId: 0, members: this.roster });
             this.updateLobbyUI();
           }
@@ -2017,6 +2206,7 @@
           type: 'CREATE_ROOM',
           name: myName,
           colorIdx: selectedSuitIndex,
+          hatId: selectedHatId,
           isPublic: this.isPublic
         });
       } else {
@@ -2105,7 +2295,8 @@
           type: 'JOIN_ROOM',
           roomCode: code,
           name: myName,
-          colorIdx: selectedSuitIndex
+          colorIdx: selectedSuitIndex,
+          hatId: selectedHatId
         });
       } else {
         this.openLocalBroadcastRoom(code, false);
@@ -2137,7 +2328,8 @@
         this.sendRaw({
           type: 'UPDATE_PROFILE',
           name: myName,
-          colorIdx: selectedSuitIndex
+          colorIdx: selectedSuitIndex,
+          hatId: selectedHatId
         });
       } else if (this.bc) {
         if (this.isHost()) {
@@ -2145,6 +2337,7 @@
           if (me) {
             me.name = myName;
             me.colorIdx = selectedSuitIndex;
+            me.hatId = selectedHatId;
           }
           this.bc.postMessage({ type: 'ROOM_ROSTER', roomCode: this.roomCode, hostSlotId: 0, members: this.roster });
           this.updateLobbyUI();
@@ -2153,7 +2346,8 @@
             type: 'BC_PROFILE',
             slotId: this.mySlotId,
             name: myName,
-            colorIdx: selectedSuitIndex
+            colorIdx: selectedSuitIndex,
+            hatId: selectedHatId
           });
         }
       }
@@ -2232,13 +2426,15 @@
 
       for (const m of this.roster) {
         const col = SUIT_COLORS[m.colorIdx] || SUIT_COLORS[0];
+        const hatMeta = HATS_BY_ID[m.hatId] || HATS[0];
+        const hatIcon = hatMeta.id !== 'none' ? `${hatMeta.icon} ` : '';
         const pill = document.createElement('span');
         pill.className = 'mp-pill';
         const dot = document.createElement('span');
         dot.className = 'mp-pill-dot';
         dot.style.background = col.hex;
         const txt = document.createElement('span');
-        txt.textContent = `${m.name}${m.slotId === this.mySlotId ? ' (You)' : ''}${m.isHost ? ' ★' : ''}`;
+        txt.textContent = `${hatIcon}${m.name}${m.slotId === this.mySlotId ? ' (You)' : ''}${m.isHost ? ' ★' : ''}`;
         pill.appendChild(dot);
         pill.appendChild(txt);
         DOM.mpRosterList.appendChild(pill);
@@ -2265,6 +2461,9 @@
           if (msg.colorIdx !== undefined) {
             selectSuitSwatch(msg.colorIdx, false);
           }
+          if (msg.hatId !== undefined) {
+            selectHat(msg.hatId, false);
+          }
           this.updateLobbyUI();
           break;
         }
@@ -2278,8 +2477,9 @@
           }
           this.roster = msg.members || [];
           const me = this.roster.find(r => r.slotId === this.mySlotId);
-          if (me && me.colorIdx !== selectedSuitIndex) {
-            selectSuitSwatch(me.colorIdx, false);
+          if (me) {
+            if (me.colorIdx !== selectedSuitIndex) selectSuitSwatch(me.colorIdx, false);
+            if (me.hatId && me.hatId !== selectedHatId) selectHat(me.hatId, false);
           }
           this.updateLobbyUI();
           break;
@@ -2392,7 +2592,20 @@
       }, 1200);
     }
   });
-  DOM.playerNameInput.value = pickRandomAstronautName();
+  try {
+    const savedName = localStorage.getItem('starship_name');
+    if (savedName && savedName.trim()) {
+      DOM.playerNameInput.value = sanitizeName(savedName);
+    } else if (!DOM.playerNameInput.value) {
+      DOM.playerNameInput.value = pickRandomAstronautName();
+    }
+  } catch (_) {
+    if (!DOM.playerNameInput.value) DOM.playerNameInput.value = pickRandomAstronautName();
+  }
+  DOM.playerNameInput.addEventListener('input', () => {
+    updateLobbyCharacterPreview();
+    try { localStorage.setItem('starship_name', DOM.playerNameInput.value); } catch (_) {}
+  });
   DOM.playerNameInput.addEventListener('change', () => NetEngine.updateProfile());
   NetEngine.init();
 
@@ -2501,6 +2714,7 @@
     const availableBotNames = BOT_NAMES.filter(n => !humanNamesLower.has(n.toLowerCase()));
     const botNamePool = availableBotNames.length > 0 ? availableBotNames : BOT_NAMES;
     const botColors = SUIT_COLORS.filter((_, idx) => !usedColorIndices.has(idx));
+    const botHats = HATS.filter(h => h.id !== 'none').map(h => h.id);
     let botColorCursor = 0;
     let botNameCursor = 0;
 
@@ -2512,6 +2726,9 @@
         ? (SUIT_COLORS[humanSlot.colorIdx] || SUIT_COLORS[0])
         : (botColors[botColorCursor++] || SUIT_COLORS[i % SUIT_COLORS.length]);
       const pName = isHuman ? humanSlot.name : botNamePool[botNameCursor++ % botNamePool.length];
+      const pHat = isHuman
+        ? (humanSlot.hatId || (humanSlot.slotId === localPlayerId ? selectedHatId : 'none'))
+        : botHats[i % botHats.length];
 
       const angle = (i / totalCount) * Math.PI * 2;
       const sx = 1200 + Math.cos(angle) * 145;
@@ -2527,8 +2744,10 @@
         name: pName,
         isHuman,
         color: col,
+        hatId: pHat,
         disguiseColor: null,
         disguiseName: null,
+        disguiseHat: null,
         disguiseTimer: 0,
         subRole: 'NONE',
         abilityCooldown: 8,
@@ -2628,6 +2847,7 @@
           name: p.name,
           isHuman: p.isHuman,
           color: p.color,
+          hatId: p.hatId,
           subRole: p.subRole,
           x: p.x,
           y: p.y,
@@ -2650,8 +2870,10 @@
     }
     players = (msg.players || []).map(p => ({
       ...p,
+      hatId: p.hatId || 'none',
       disguiseColor: null,
       disguiseName: null,
+      disguiseHat: null,
       disguiseTimer: 0,
       abilityCooldown: 8,
       vitalsBattery: 100,
@@ -2742,12 +2964,14 @@
           if (msg.targetId === null) {
             shifter.disguiseColor = null;
             shifter.disguiseName = null;
+            shifter.disguiseHat = null;
             shifter.disguiseTimer = 0;
           } else {
             const target = players.find(p => p.id === msg.targetId);
             if (target) {
               shifter.disguiseColor = target.color;
               shifter.disguiseName = target.name;
+              shifter.disguiseHat = target.hatId;
               shifter.disguiseTimer = 15.0;
             }
           }
@@ -3263,6 +3487,7 @@
         spawnShiftResidue(human.x, human.y);
         human.disguiseColor = null;
         human.disguiseName = null;
+        human.disguiseHat = null;
         human.disguiseTimer = 0;
         human.abilityCooldown = 15;
         NetEngine.sendRpc('SHAPESHIFT', { playerId: human.id, targetId: null });
@@ -4043,6 +4268,7 @@
         spawnShiftResidue(human.x, human.y);
         human.disguiseColor = p.color;
         human.disguiseName = p.name;
+        human.disguiseHat = p.hatId;
         human.disguiseTimer = 15.0;
         logMatchEvent(`${formatPlayerBadge(human)} shapeshifted into ${formatPlayerBadge(p)}.`);
         if (NetEngine.inRoom) NetEngine.sendRpc('SHAPESHIFT', { playerId: human.id, targetId: p.id });
@@ -4103,6 +4329,7 @@
           spawnShiftResidue(bot.x, bot.y);
           bot.disguiseColor = null;
           bot.disguiseName = null;
+          bot.disguiseHat = null;
           bot.abilityCooldown = 18;
           if (NetEngine.inRoom) NetEngine.sendRpc('SHAPESHIFT', { playerId: bot.id, targetId: null });
         }
@@ -4283,6 +4510,7 @@
           spawnShiftResidue(bot.x, bot.y);
           bot.disguiseColor = sample.color;
           bot.disguiseName = sample.name;
+          bot.disguiseHat = sample.hatId;
           bot.disguiseTimer = 14.0;
           logMatchEvent(`${formatPlayerBadge(bot)} shapeshifted into ${formatPlayerBadge(sample)}.`);
           if (NetEngine.inRoom) NetEngine.sendRpc('SHAPESHIFT', { playerId: bot.id, targetId: sample.id });
@@ -4455,6 +4683,7 @@
       p.currentVentId = null;
       p.disguiseColor = null;
       p.disguiseName = null;
+      p.disguiseHat = null;
       p.disguiseTimer = 0;
       const angle = (i / total) * Math.PI * 2;
       p.x = 1200 + Math.cos(angle) * 145;
@@ -4703,7 +4932,9 @@
       nameRow.style.fontWeight = '800';
       nameRow.style.color = nameColor;
       const tagSuffix = p.id === localPlayerId ? ' (You)' : (p.isHuman ? ' [Player]' : '');
-      nameRow.textContent = `${formatPlayerBadge(p)}${tagSuffix}`;
+      const hatMeta = HATS_BY_ID[p.hatId] || HATS[0];
+      const hatIcon = hatMeta.id !== 'none' ? `${hatMeta.icon} ` : '';
+      nameRow.textContent = `${hatIcon}${formatPlayerBadge(p)}${tagSuffix}`;
 
       const subRow = document.createElement('div');
       subRow.style.cssText = 'font-size:11px; color:#94a3b8;';
@@ -5113,8 +5344,303 @@
   }
 
   // ============================================================================
-  // 12. PROCEDURAL CHARACTER RENDERER (Bean Astronaut, Disguises, Walk Bounce)
+  // 12. PROCEDURAL CHARACTER RENDERER (Bean Astronaut, Cosmetics, Walk Bounce)
   // ============================================================================
+  function drawAstronautHat(ctx, hatId, facing = 1, activeCol = null) {
+    if (!hatId || hatId === 'none') return;
+
+    ctx.save();
+    switch (hatId) {
+      case 'captain': {
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(3, -21, 13, 3.5, 0.1 * facing, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#090d16';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.beginPath();
+        ctx.ellipse(5, -21.5, 6, 1.2, 0.1 * facing, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#1e3a8a';
+        ctx.beginPath();
+        ctx.moveTo(-11, -22);
+        ctx.quadraticCurveTo(-12, -31, -2, -33);
+        ctx.quadraticCurveTo(8, -32, 11, -25);
+        ctx.lineTo(10, -22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.arc(0, -26.5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(-1, -25, 2, 4);
+        break;
+      }
+
+      case 'crown': {
+        ctx.fillStyle = '#facc15';
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(-11, -22);
+        ctx.lineTo(-13, -33);
+        ctx.lineTo(-6, -26);
+        ctx.lineTo(0, -35);
+        ctx.lineTo(6, -26);
+        ctx.lineTo(13, -33);
+        ctx.lineTo(11, -22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath(); ctx.arc(0, -26, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#06b6d4';
+        ctx.beginPath(); ctx.arc(-7, -24, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath(); ctx.arc(7, -24, 1.5, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+
+      case 'antenna': {
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath();
+        ctx.ellipse(0, -22, 5, 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(0, -22);
+        ctx.quadraticCurveTo(-3, -29, 2, -33);
+        ctx.lineTo(0, -40);
+        ctx.stroke();
+
+        const glow = 0.5 + Math.sin(performance.now() * 0.008) * 0.4;
+        ctx.fillStyle = '#ef4444';
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 8 * glow;
+        ctx.beginPath();
+        ctx.arc(0, -41, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'sprout': {
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.arc(0, -22, 3, 0, Math.PI);
+        ctx.fill();
+
+        ctx.strokeStyle = '#16a34a';
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, -22);
+        ctx.quadraticCurveTo(-2, -30, 0, -34);
+        ctx.stroke();
+
+        ctx.fillStyle = '#4ade80';
+        ctx.strokeStyle = '#15803d';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, -32);
+        ctx.quadraticCurveTo(-10, -38, -12, -32);
+        ctx.quadraticCurveTo(-6, -29, 0, -32);
+        ctx.fill(); ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, -33);
+        ctx.quadraticCurveTo(10, -40, 13, -34);
+        ctx.quadraticCurveTo(7, -30, 0, -33);
+        ctx.fill(); ctx.stroke();
+        break;
+      }
+
+      case 'dum': {
+        ctx.translate(3, -15);
+        ctx.rotate(0.08);
+        ctx.fillStyle = '#fef08a';
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        drawRoundRect(ctx, -10, -11, 20, 16, 2);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.moveTo(7, -11);
+        ctx.lineTo(10, -8);
+        ctx.lineTo(7, -8);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 8.5px "Comic Sans MS", cursive, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('DUM', 0, 0);
+        break;
+      }
+
+      case 'party': {
+        ctx.beginPath();
+        ctx.moveTo(-10, -22);
+        ctx.lineTo(2, -44);
+        ctx.lineTo(9, -22);
+        ctx.closePath();
+        ctx.fillStyle = '#f43f5e';
+        ctx.fill();
+        ctx.strokeStyle = '#be123c';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-5, -28); ctx.lineTo(4, -28);
+        ctx.moveTo(-2, -35); ctx.lineTo(3, -35);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(2, -45, 4, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'halo': {
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 3.2;
+        ctx.shadowColor = '#fde047';
+        ctx.shadowBlur = 9;
+        ctx.beginPath();
+        ctx.ellipse(0, -33, 14, 4.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+
+      case 'egg': {
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-12, -22);
+        ctx.quadraticCurveTo(-14, -26, -5, -28);
+        ctx.quadraticCurveTo(3, -29, 11, -26);
+        ctx.quadraticCurveTo(15, -23, 11, -21);
+        ctx.quadraticCurveTo(0, -20, -12, -22);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.ellipse(1, -25, 5, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(2.5, -26, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'beanie': {
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(0, -24, 12, Math.PI, 0);
+        ctx.fill();
+        ctx.strokeStyle = '#991b1b';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        drawRoundRect(ctx, -13, -25, 26, 6, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(0, -36, 4, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+
+      case 'mini': {
+        const col = activeCol || SUIT_COLORS[0];
+        ctx.fillStyle = col.hex;
+        ctx.strokeStyle = '#090d16';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        drawRoundRect(ctx, -5, -34, 10, 12, 5);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = col.dark;
+        ctx.beginPath();
+        drawRoundRect(ctx, -8, -31, 3.5, 8, 2);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        drawRoundRect(ctx, -1, -32, 6.5, 4.5, 2);
+        ctx.fill(); ctx.stroke();
+        break;
+      }
+
+      case 'chef': {
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(-9, -25, 18, 5);
+        ctx.strokeRect(-9, -25, 18, 5);
+
+        ctx.beginPath();
+        ctx.arc(-6, -32, 6, Math.PI * 0.5, Math.PI * 1.5);
+        ctx.arc(0, -37, 7, Math.PI, 0);
+        ctx.arc(6, -32, 6, Math.PI * 1.5, Math.PI * 0.5);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        break;
+      }
+
+      case 'viking': {
+        ctx.fillStyle = '#64748b';
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, -22, 12, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#fef3c7';
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-10, -23);
+        ctx.quadraticCurveTo(-18, -30, -17, -37);
+        ctx.quadraticCurveTo(-13, -29, -8, -26);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(10, -23);
+        ctx.quadraticCurveTo(18, -30, 17, -37);
+        ctx.quadraticCurveTo(13, -29, 8, -26);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        break;
+      }
+    }
+    ctx.restore();
+  }
+
   function drawAstronaut(ctx, p, screenX, screenY, scale = 1) {
     ctx.save();
     ctx.translate(screenX, screenY);
@@ -5216,6 +5742,10 @@
       ctx.stroke();
     }
 
+    // Cosmetic Hat / Headwear
+    const activeHat = isDisguised ? (p.disguiseHat || 'none') : (p.hatId || 'none');
+    drawAstronautHat(ctx, activeHat, p.facing, activeCol);
+
     ctx.restore();
 
     // Nameplate above head
@@ -5223,7 +5753,8 @@
     ctx.textAlign = 'center';
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#000';
-    const nameY = -30 + bounceY;
+    const hasTallHat = activeHat && activeHat !== 'none';
+    const nameY = (hasTallHat ? -38 : -30) + bounceY;
     ctx.strokeText(displayLabel, 0, nameY);
     const isFellowImpostor = viewer && viewer.isImpostor && p.isImpostor && (!isDisguised || isSelf);
     ctx.fillStyle = isFellowImpostor ? '#f87171' : '#ffffff';
@@ -5260,6 +5791,14 @@
     ctx.fill();
     ctx.stroke();
 
+    if (body.hatId && body.hatId !== 'none') {
+      ctx.save();
+      ctx.translate(-14, -6);
+      ctx.rotate(-0.35);
+      drawAstronautHat(ctx, body.hatId, 1, body.color);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
@@ -5285,6 +5824,7 @@
           spawnShiftResidue(human.x, human.y);
           human.disguiseColor = null;
           human.disguiseName = null;
+          human.disguiseHat = null;
           human.abilityCooldown = 15;
           if (NetEngine.inRoom) NetEngine.sendRpc('SHAPESHIFT', { playerId: human.id, targetId: null });
         }
@@ -5507,6 +6047,7 @@
 
     if (state === GAME_STATES.LOBBY) {
       drawStarfieldBackground();
+      updateLobbyCharacterPreview();
       return;
     }
 
@@ -5972,13 +6513,17 @@
 
     cutsceneDummyKiller.name = killer.name;
     cutsceneDummyKiller.color = killer.disguiseColor || killer.color;
+    cutsceneDummyKiller.hatId = killer.disguiseHat || killer.hatId || 'none';
     cutsceneDummyKiller.disguiseColor = null;
     cutsceneDummyKiller.disguiseName = null;
+    cutsceneDummyKiller.disguiseHat = null;
 
     cutsceneDummyVictim.name = victim.name;
     cutsceneDummyVictim.color = victim.color;
+    cutsceneDummyVictim.hatId = victim.hatId || 'none';
     cutsceneDummyVictim.disguiseColor = null;
     cutsceneDummyVictim.disguiseName = null;
+    cutsceneDummyVictim.disguiseHat = null;
 
     const slideOffset = matchConfig.reducedMotion ? 15 : (progress * 45);
     drawAstronaut(ctx, cutsceneDummyKiller, cx - 120 + slideOffset, cy + 25, 2.2);
@@ -6030,8 +6575,10 @@
       }
       cutsceneDummyVictim.name = ejectedPlayer.name;
       cutsceneDummyVictim.color = ejectedPlayer.color;
+      cutsceneDummyVictim.hatId = ejectedPlayer.hatId || 'none';
       cutsceneDummyVictim.disguiseColor = null;
       cutsceneDummyVictim.disguiseName = null;
+      cutsceneDummyVictim.disguiseHat = null;
       drawAstronaut(ctx, cutsceneDummyVictim, 0, 0, 1.8);
       ctx.restore();
     }

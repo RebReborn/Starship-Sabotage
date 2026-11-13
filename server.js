@@ -59,6 +59,16 @@ function sanitizeName(raw) {
   return cleaned || pickRandomAstronautName();
 }
 
+const VALID_HATS = new Set([
+  'none', 'captain', 'crown', 'antenna', 'sprout',
+  'dum', 'party', 'halo', 'egg', 'beanie', 'mini', 'chef', 'viking'
+]);
+
+function sanitizeHat(raw) {
+  const s = String(raw || '').toLowerCase().trim();
+  return VALID_HATS.has(s) ? s : 'none';
+}
+
 // ============================================================================
 // 1. NATIVE RFC 6455 WEBSOCKET FRAME ENCODER & DECODER
 // ============================================================================
@@ -119,6 +129,7 @@ function getRoomRosterPayload(room) {
       slotId,
       name: c.name,
       colorIdx: c.colorIdx,
+      hatId: c.hatId || 'none',
       isHost: slotId === room.hostSlotId
     });
   }
@@ -226,6 +237,7 @@ function handleClientMessage(client, msg) {
       const code = generateRoomCode();
       client.name = sanitizeName(msg.name);
       client.colorIdx = Math.max(0, Math.min(7, parseInt(msg.colorIdx, 10) || 0));
+      client.hatId = sanitizeHat(msg.hatId);
       client.slotId = 0;
       client.roomCode = code;
 
@@ -245,7 +257,8 @@ function handleClientMessage(client, msg) {
         slotId: 0,
         hostSlotId: 0,
         isPublic: room.isPublic,
-        colorIdx: client.colorIdx
+        colorIdx: client.colorIdx,
+        hatId: client.hatId
       });
       broadcastRoom(room, getRoomRosterPayload(room));
       if (room.isPublic) broadcastPublicRooms();
@@ -276,6 +289,7 @@ function handleClientMessage(client, msg) {
       client.slotId = assignedSlot;
       client.name = sanitizeName(msg.name);
       client.colorIdx = pickAvailableColor(room, parseInt(msg.colorIdx, 10));
+      client.hatId = sanitizeHat(msg.hatId);
       client.roomCode = code;
       room.clients.set(assignedSlot, client);
 
@@ -285,7 +299,8 @@ function handleClientMessage(client, msg) {
         slotId: assignedSlot,
         hostSlotId: room.hostSlotId,
         isPublic: room.isPublic,
-        colorIdx: client.colorIdx
+        colorIdx: client.colorIdx,
+        hatId: client.hatId
       });
       broadcastRoom(room, getRoomRosterPayload(room));
       if (room.isPublic) broadcastPublicRooms();
@@ -305,6 +320,7 @@ function handleClientMessage(client, msg) {
       const room = rooms.get(client.roomCode);
       if (!room) return;
       if (msg.name) client.name = sanitizeName(msg.name);
+      if (msg.hatId !== undefined) client.hatId = sanitizeHat(msg.hatId);
       if (msg.colorIdx !== undefined) {
         const reqCol = parseInt(msg.colorIdx, 10);
         const takenByOther = [...room.clients.values()].some(
@@ -467,7 +483,8 @@ server.on('upgrade', (req, socket) => {
     roomCode: null,
     slotId: 0,
     name: 'Astronaut',
-    colorIdx: 0
+    colorIdx: 0,
+    hatId: 'none'
   };
   allClients.add(client);
 
