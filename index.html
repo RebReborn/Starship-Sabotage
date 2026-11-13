@@ -1516,6 +1516,8 @@
             <option value="crewmate">Always Crewmate</option>
             <option value="engineer">Crewmate — Engineer (Can Vent)</option>
             <option value="scientist">Crewmate — Scientist (Portable Vitals)</option>
+            <option value="sheriff">Crewmate — Sheriff (Can Shoot Impostors)</option>
+            <option value="jester">Neutral — Jester (Win by Getting Ejected)</option>
             <option value="impostor">Always Impostor</option>
             <option value="shapeshifter">Impostor — Shapeshifter (Disguise)</option>
           </select>
@@ -3530,19 +3532,50 @@
       DOM.hudRole.style.color = '#ef4444';
       DOM.hudSubRole.textContent = human.subRole === 'SHAPESHIFTER' ? '✦ SHAPESHIFTER (Disguise [X])' : '✦ SABOTEUR';
       DOM.btnKill.style.display = 'flex';
+      DOM.btnKill.style.borderColor = '#ef4444';
+      DOM.killLabel.textContent = 'KILL';
       DOM.btnVent.style.display = 'flex';
       DOM.btnSabotage.style.display = 'flex';
       DOM.btnSpecial.style.display = human.subRole === 'SHAPESHIFTER' ? 'flex' : 'none';
-    } else {
-      DOM.hudRole.textContent = 'CREWMATE';
-      DOM.hudRole.style.color = '#38bdf8';
-      DOM.hudSubRole.textContent = human.subRole === 'ENGINEER'
-        ? '🔧 ENGINEER (Can Vent [V])'
-        : (human.subRole === 'SCIENTIST' ? '🧬 SCIENTIST (Portable Vitals [X])' : '✦ ASTRONAUT');
+    } else if (human.subRole === 'JESTER') {
+      DOM.hudRole.textContent = 'JESTER';
+      DOM.hudRole.style.color = '#e879f9';
+      DOM.hudSubRole.textContent = '✦ TRICKSTER (Get Voted Out)';
+      DOM.hudSubRole.style.color = '#f472b6';
       DOM.btnKill.style.display = 'none';
-      DOM.btnVent.style.display = human.subRole === 'ENGINEER' ? 'flex' : 'none';
+      DOM.btnVent.style.display = 'none';
       DOM.btnSabotage.style.display = 'none';
-      DOM.btnSpecial.style.display = human.subRole === 'SCIENTIST' ? 'flex' : 'none';
+      DOM.btnSpecial.style.display = 'none';
+    } else {
+      DOM.hudRole.textContent = human.alive ? 'CREWMATE' : 'GHOST';
+      DOM.hudRole.style.color = '#38bdf8';
+      if (human.subRole === 'SHERIFF') {
+        DOM.hudSubRole.textContent = '✦ SHERIFF (Shoot [Q])';
+        DOM.hudSubRole.style.color = '#eab308';
+        DOM.btnKill.style.display = 'flex';
+        DOM.btnKill.style.borderColor = '#eab308';
+        DOM.killLabel.textContent = 'SHOOT';
+        DOM.btnVent.style.display = 'none';
+        DOM.btnSabotage.style.display = 'none';
+        DOM.btnSpecial.style.display = 'none';
+      } else if (human.subRole === 'GUARDIAN_ANGEL') {
+        DOM.hudSubRole.textContent = '🪽 GUARDIAN ANGEL (Protect [X])';
+        DOM.hudSubRole.style.color = '#38bdf8';
+        DOM.btnKill.style.display = 'none';
+        DOM.btnVent.style.display = 'none';
+        DOM.btnSabotage.style.display = 'none';
+        DOM.btnSpecial.style.display = 'flex';
+        DOM.btnSpecial.style.borderColor = '#38bdf8';
+        DOM.specialLabel.textContent = 'PROTECT';
+      } else {
+        DOM.hudSubRole.textContent = human.subRole === 'ENGINEER'
+          ? '🔧 ENGINEER (Can Vent [V])'
+          : (human.subRole === 'SCIENTIST' ? '🧬 SCIENTIST (Portable Vitals [X])' : '✦ ASTRONAUT');
+        DOM.btnKill.style.display = 'none';
+        DOM.btnVent.style.display = human.subRole === 'ENGINEER' ? 'flex' : 'none';
+        DOM.btnSabotage.style.display = 'none';
+        DOM.btnSpecial.style.display = human.subRole === 'SCIENTIST' ? 'flex' : 'none';
+      }
     }
 
     updateTaskHUD();
@@ -3678,6 +3711,8 @@
         inVent: false,
         currentVentId: null,
         killCooldown: 12,
+        shieldTimer: 0,
+        protectCooldown: 0,
         tasks: shuffledTasks,
         aiState: 'ROAM_TASK',
         aiTargetTask: null,
@@ -3700,7 +3735,7 @@
     // Assign Impostor role(s)
     let indices = players.map((_, i) => i);
     const forceImpostor = rolePref === 'impostor' || rolePref === 'shapeshifter';
-    const forceCrew = rolePref === 'crewmate' || rolePref === 'engineer' || rolePref === 'scientist';
+    const forceCrew = rolePref === 'crewmate' || rolePref === 'engineer' || rolePref === 'scientist' || rolePref === 'sheriff' || rolePref === 'jester';
 
     if (forceImpostor) {
       const hostPlayer = getLocalPlayer() || players[0];
@@ -3732,12 +3767,29 @@
       if (p.id === localPlayerId) {
         if (rolePref === 'engineer') p.subRole = 'ENGINEER';
         else if (rolePref === 'scientist') p.subRole = 'SCIENTIST';
+        else if (rolePref === 'sheriff') p.subRole = 'SHERIFF';
+        else if (rolePref === 'jester') p.subRole = 'JESTER';
         else if (rolePref === 'shapeshifter') p.subRole = 'SHAPESHIFTER';
         else if (p.isImpostor && Math.random() < 0.5) p.subRole = 'SHAPESHIFTER';
-        else if (!p.isImpostor) p.subRole = Math.random() < 0.5 ? 'ENGINEER' : 'SCIENTIST';
+        else if (!p.isImpostor) {
+          const r = Math.random();
+          p.subRole = r < 0.3 ? 'SHERIFF' : (r < 0.55 ? 'ENGINEER' : (r < 0.8 ? 'SCIENTIST' : 'NONE'));
+        }
       } else {
         if (p.isImpostor && Math.random() < 0.45) p.subRole = 'SHAPESHIFTER';
-        else if (!p.isImpostor && Math.random() < 0.35) p.subRole = Math.random() < 0.5 ? 'ENGINEER' : 'SCIENTIST';
+        else if (!p.isImpostor) {
+          const r = Math.random();
+          p.subRole = r < 0.25 ? 'SHERIFF' : (r < 0.45 ? 'ENGINEER' : (r < 0.65 ? 'SCIENTIST' : (r < 0.78 ? 'JESTER' : 'NONE')));
+        }
+      }
+      if (p.subRole === 'SHERIFF') {
+        p.killCooldown = 18;
+      }
+      if (p.subRole === 'JESTER') {
+        p.tasks = [...nonVisualPool].sort(() => Math.random() - 0.5).slice(0, 4).map(t => ({
+          ...t,
+          completed: false
+        }));
       }
     }
 
@@ -3822,6 +3874,33 @@
         if (killer && victim && victim.alive) {
           if (msg.x !== undefined) { victim.x = msg.x; victim.y = msg.y; }
           executeKill(killer, victim, killer.id === localPlayerId, true);
+        }
+        break;
+      }
+      case 'SHERIFF_SHOOT': {
+        const sheriff = players.find(p => p.id === msg.sheriffId);
+        const elim = players.find(p => p.id === msg.eliminatedId);
+        if (sheriff && elim && elim.alive) {
+          executeKill(sheriff, elim, elim.id === localPlayerId, true);
+        }
+        break;
+      }
+      case 'PROTECT': {
+        const target = players.find(p => p.id === msg.targetId);
+        if (target) {
+          applyGuardianShield(target, msg.duration || 8.5);
+          spawnBurst(target.x, target.y, 22, '#38bdf8', 90, 0.75);
+          SFX.beep(880);
+        }
+        break;
+      }
+      case 'SHIELD_BLOCKED': {
+        const target = players.find(p => p.id === msg.victimId);
+        if (target) {
+          target.shieldTimer = 0;
+          spawnBurst(target.x, target.y, 28, '#38bdf8', 120, 0.85);
+          SFX.taskDone();
+          ScreenShake.trigger(0.4);
         }
         break;
       }
@@ -4367,21 +4446,26 @@
 
   function handleKillAction() {
     const human = getLocalPlayer();
-    if (!human || !human.isImpostor || !human.alive || human.inVent || human.killCooldown > 0) return;
+    if (!human || !human.alive || human.inVent || human.killCooldown > 0) return;
 
-    const victim = getNearestKillTarget(human);
-    if (victim) {
-      executeKill(human, victim, true);
+    if (human.isImpostor) {
+      const victim = getNearestKillTarget(human);
+      if (victim) {
+        executeKill(human, victim, true);
+      }
+    } else if (human.subRole === 'SHERIFF') {
+      handleSheriffShootAction();
     }
   }
 
-  function getNearestKillTarget(impostor) {
+  function getNearestKillTarget(actor) {
     let best = null;
     let bestDist = CONFIG.KILL_RANGE;
     for (const p of players) {
-      if (p.id !== impostor.id && p.alive && !p.isImpostor && !p.inVent) {
-        const d = Math.hypot(impostor.x - p.x, impostor.y - p.y);
-        if (d < bestDist && hasLineOfSight(impostor.x, impostor.y, p.x, p.y)) {
+      if (p.id !== actor.id && p.alive && !p.inVent) {
+        if (actor.isImpostor && p.isImpostor) continue;
+        const d = Math.hypot(actor.x - p.x, actor.y - p.y);
+        if (d < bestDist && hasLineOfSight(actor.x, actor.y, p.x, p.y)) {
           bestDist = d;
           best = p;
         }
@@ -4390,31 +4474,139 @@
     return best;
   }
 
+  function checkGuardianAngelEligibility(player) {
+    if (!player || player.isImpostor || player.subRole === 'JESTER' || player.subRole === 'GUARDIAN_ANGEL') return;
+    const hasAngel = players.some(p => p.subRole === 'GUARDIAN_ANGEL');
+    if (!hasAngel) {
+      player.subRole = 'GUARDIAN_ANGEL';
+      player.protectCooldown = 12;
+      logMatchEvent(`🪽 ${formatPlayerBadge(player)} has ascended as a Guardian Angel!`);
+      if (player.id === localPlayerId) {
+        setupLocalPlayerHUD();
+      }
+    }
+  }
+
+  function applyGuardianShield(target, duration = 8.5) {
+    if (!target) return;
+    target.shieldTimer = duration;
+  }
+
+  function handleGuardianProtectAction() {
+    const human = getLocalPlayer();
+    if (!human || human.alive || human.subRole !== 'GUARDIAN_ANGEL' || state !== GAME_STATES.PLAYING) return;
+    if (human.protectCooldown > 0) {
+      SFX.error();
+      return;
+    }
+    let bestTarget = null;
+    let bestDist = 180;
+    for (const p of players) {
+      if (!p.alive || p.inVent) continue;
+      const d = Math.hypot(human.x - p.x, human.y - p.y);
+      if (d < bestDist) {
+        bestDist = d;
+        bestTarget = p;
+      }
+    }
+    if (!bestTarget) {
+      SFX.error();
+      return;
+    }
+
+    applyGuardianShield(bestTarget, 8.5);
+    human.protectCooldown = 38;
+    SFX.beep(880);
+    spawnBurst(bestTarget.x, bestTarget.y, 24, '#38bdf8', 95, 0.75);
+    logMatchEvent(`🪽 Guardian Angel cast a celestial shield on ${formatPlayerBadge(bestTarget)}!`);
+    if (NetEngine.inRoom) {
+      NetEngine.sendRpc('PROTECT', { angelId: human.id, targetId: bestTarget.id, duration: 8.5 });
+    }
+  }
+
+  function handleSheriffShootAction() {
+    const human = getLocalPlayer();
+    if (!human || !human.alive || human.subRole !== 'SHERIFF' || state !== GAME_STATES.PLAYING) return;
+    if (human.killCooldown > 0) {
+      SFX.error();
+      return;
+    }
+    const target = getNearestKillTarget(human);
+    if (!target) {
+      SFX.error();
+      return;
+    }
+
+    if (target.shieldTimer > 0) {
+      target.shieldTimer = 0;
+      human.killCooldown = 15;
+      SFX.taskDone();
+      ScreenShake.trigger(0.4);
+      spawnBurst(target.x, target.y, 25, '#38bdf8', 120, 0.8);
+      logMatchEvent(`🛡️ Celestial Shield DEFLECTED Sheriff ${formatPlayerBadge(human)}'s shot on ${formatPlayerBadge(target)}!`);
+      if (NetEngine.inRoom) {
+        NetEngine.sendRpc('SHIELD_BLOCKED', { killerId: human.id, victimId: target.id });
+      }
+      return;
+    }
+
+    if (target.isImpostor) {
+      logMatchEvent(`🤠 Sheriff ${formatPlayerBadge(human)} shot and eliminated Impostor ${formatPlayerBadge(target)}!`);
+      executeKill(human, target, true);
+      human.killCooldown = 18;
+      if (NetEngine.inRoom) {
+        NetEngine.sendRpc('SHERIFF_SHOOT', { sheriffId: human.id, targetId: target.id, targetDied: true, eliminatedId: target.id });
+      }
+    } else {
+      logMatchEvent(`⚠️ Sheriff ${formatPlayerBadge(human)} mistakenly shot innocent ${formatPlayerBadge(target)} and died of remorse!`);
+      executeKill(human, human, true);
+      if (NetEngine.inRoom) {
+        NetEngine.sendRpc('SHERIFF_SHOOT', { sheriffId: human.id, targetId: target.id, targetDied: false, eliminatedId: human.id });
+      }
+    }
+  }
+
   function executeKill(killer, victim, showCutscene, fromNetwork = false) {
+    if (victim.shieldTimer > 0) {
+      victim.shieldTimer = 0;
+      killer.killCooldown = matchConfig.killCd * getEffectiveImpostorCdFactor();
+      SFX.taskDone();
+      ScreenShake.trigger(0.45);
+      spawnBurst(victim.x, victim.y, 30, '#38bdf8', 130, 0.85);
+      logMatchEvent(`🛡️ Celestial Shield DEFLECTED elimination attempt by ${formatPlayerBadge(killer)} on ${formatPlayerBadge(victim)}!`);
+      if (!fromNetwork && NetEngine.inRoom) {
+        NetEngine.sendRpc('SHIELD_BLOCKED', { killerId: killer.id, victimId: victim.id });
+      }
+      return false;
+    }
+
     SFX.kill();
     SFX.killStinger();
     ScreenShake.trigger(0.75);
     spawnBurst(victim.x, victim.y, 28, '#ef4444', 120, 0.75);
     victim.alive = false;
     victim.timeOfDeath = performance.now();
+    checkGuardianAngelEligibility(victim);
     matchStats.killsByPlayer[killer.id] = (matchStats.killsByPlayer[killer.id] || 0) + 1;
     killer.killCooldown = matchConfig.killCd * getEffectiveImpostorCdFactor();
     killer.bloodStepsRemaining = CONFIG.BLOOD_TRAIL_STEPS; // Step-based bloody footprints (#38)
 
     // Validate teleport destination with isWalkable so killer never lands in a wall (#9)
-    const prefOffset = killer.x < victim.x ? -22 : 22;
-    if (isWalkable(victim.x + prefOffset, victim.y)) {
-      killer.x = victim.x + prefOffset;
-      killer.y = victim.y;
-    } else if (isWalkable(victim.x - prefOffset, victim.y)) {
-      killer.x = victim.x - prefOffset;
-      killer.y = victim.y;
-    } else if (isWalkable(victim.x, victim.y)) {
-      killer.x = victim.x;
-      killer.y = victim.y;
+    if (killer.id !== victim.id) {
+      const prefOffset = killer.x < victim.x ? -22 : 22;
+      if (isWalkable(victim.x + prefOffset, victim.y)) {
+        killer.x = victim.x + prefOffset;
+        killer.y = victim.y;
+      } else if (isWalkable(victim.x - prefOffset, victim.y)) {
+        killer.x = victim.x - prefOffset;
+        killer.y = victim.y;
+      } else if (isWalkable(victim.x, victim.y)) {
+        killer.x = victim.x;
+        killer.y = victim.y;
+      }
+      killer.netX = killer.x;
+      killer.netY = killer.y;
     }
-    killer.netX = killer.x;
-    killer.netY = killer.y;
 
     const killRoom = getRoomNameAt(victim.x, victim.y);
     deadBodies.push({
@@ -4427,7 +4619,11 @@
       reported: false
     });
 
-    logMatchEvent(`${formatPlayerBadge(killer)}${killer.disguiseName ? ` (disguised as ${killer.disguiseName})` : ''} eliminated ${formatPlayerBadge(victim)} in ${killRoom}.`);
+    if (killer.id === victim.id) {
+      logMatchEvent(`${formatPlayerBadge(killer)} died of remorse in ${killRoom}.`);
+    } else {
+      logMatchEvent(`${formatPlayerBadge(killer)}${killer.disguiseName ? ` (disguised as ${killer.disguiseName})` : ''} eliminated ${formatPlayerBadge(victim)} in ${killRoom}.`);
+    }
 
     if (!fromNetwork && NetEngine.inRoom) {
       NetEngine.sendRpc('KILL', {
@@ -4513,7 +4709,14 @@
 
   function handleSpecialAbility() {
     const human = getLocalPlayer();
-    if (!human || !human.alive || state !== GAME_STATES.PLAYING) return;
+    if (!human || state !== GAME_STATES.PLAYING) return;
+
+    if (human.subRole === 'GUARDIAN_ANGEL') {
+      handleGuardianProtectAction();
+      return;
+    }
+
+    if (!human.alive) return;
 
     if (human.subRole === 'SCIENTIST') {
       if (human.vitalsBattery <= 0) {
@@ -5441,8 +5644,32 @@
 
       bot.lastSeenRoom = getRoomNameAt(bot.x, bot.y);
 
-      // Dead Crewmate ghosts float toward unfinished tasks at consistent ghost speed (#6)
+      // Dead Crewmate ghosts float toward unfinished tasks or protect living crewmates
       if (!bot.alive) {
+        if (bot.subRole === 'GUARDIAN_ANGEL') {
+          if (bot.protectCooldown > 0) bot.protectCooldown = Math.max(0, bot.protectCooldown - dt);
+          if (bot.protectCooldown <= 0) {
+            const livingCrew = players.filter(p => p.alive && !p.isImpostor && !p.inVent);
+            if (livingCrew.length > 0) {
+              const target = livingCrew[Math.floor(Math.random() * livingCrew.length)];
+              const dist = Math.hypot(bot.x - target.x, bot.y - target.y);
+              if (dist < 160) {
+                applyGuardianShield(target, 8.5);
+                bot.protectCooldown = 38;
+                spawnBurst(target.x, target.y, 22, '#38bdf8', 90, 0.75);
+                SFX.beep(880);
+                logMatchEvent(`🪽 Guardian Angel cast a celestial shield on ${formatPlayerBadge(target)}!`);
+                if (NetEngine.inRoom) NetEngine.sendRpc('PROTECT', { angelId: bot.id, targetId: target.id, duration: 8.5 });
+              } else {
+                const ghostSpeed = bot.speed * CONFIG.GHOST_SPEED_MULT;
+                const dx = target.x - bot.x;
+                const dy = target.y - bot.y;
+                bot.x += (dx / dist) * ghostSpeed * dt;
+                bot.y += (dy / dist) * ghostSpeed * dt;
+              }
+            }
+          }
+        }
         if (!bot.isImpostor && matchConfig.ghostTasks) {
           const pending = bot.tasks.find(t => !t.completed);
           if (pending) {
@@ -5540,6 +5767,62 @@
 
   function updateCrewmateBot(bot, dt) {
     bot.fakingTaskPulse = 0;
+
+    // Sheriff Bot: hunts down known killers or highly suspected impostors and shoots
+    if (bot.subRole === 'SHERIFF' && bot.killCooldown <= 0) {
+      let suspect = null;
+      if (bot.memory.knownKiller !== null) {
+        suspect = players.find(p => p.id === bot.memory.knownKiller && p.alive && !p.inVent);
+      } else {
+        let maxSusp = 80;
+        for (const p of players) {
+          if (p.id !== bot.id && p.alive && !p.inVent && (bot.memory.suspicion[p.id] || 0) > maxSusp) {
+            maxSusp = bot.memory.suspicion[p.id];
+            suspect = p;
+          }
+        }
+      }
+
+      if (suspect) {
+        const dist = Math.hypot(bot.x - suspect.x, bot.y - suspect.y);
+        if (dist < CONFIG.KILL_RANGE) {
+          if (suspect.shieldTimer > 0) {
+            suspect.shieldTimer = 0;
+            bot.killCooldown = 15;
+            SFX.taskDone();
+            ScreenShake.trigger(0.35);
+            spawnBurst(suspect.x, suspect.y, 24, '#38bdf8', 110, 0.75);
+            logMatchEvent(`🛡️ Celestial Shield DEFLECTED Sheriff ${formatPlayerBadge(bot)}'s shot on ${formatPlayerBadge(suspect)}!`);
+            if (NetEngine.inRoom) NetEngine.sendRpc('SHIELD_BLOCKED', { killerId: bot.id, victimId: suspect.id });
+          } else if (suspect.isImpostor) {
+            logMatchEvent(`🤠 Sheriff ${formatPlayerBadge(bot)} shot and eliminated Impostor ${formatPlayerBadge(suspect)}!`);
+            executeKill(bot, suspect, suspect.id === localPlayerId);
+            bot.killCooldown = 18;
+            if (NetEngine.inRoom) {
+              NetEngine.sendRpc('SHERIFF_SHOOT', { sheriffId: bot.id, targetId: suspect.id, targetDied: true, eliminatedId: suspect.id });
+            }
+          } else {
+            logMatchEvent(`⚠️ Sheriff ${formatPlayerBadge(bot)} mistakenly shot innocent ${formatPlayerBadge(suspect)} and died of remorse!`);
+            executeKill(bot, bot, bot.id === localPlayerId);
+            if (NetEngine.inRoom) {
+              NetEngine.sendRpc('SHERIFF_SHOOT', { sheriffId: bot.id, targetId: suspect.id, targetDied: false, eliminatedId: bot.id });
+            }
+          }
+          return;
+        } else {
+          moveBotToward(bot, suspect.x, suspect.y, dt);
+          return;
+        }
+      }
+    }
+
+    // Jester Bot: loiters near vents to draw suspicion
+    if (bot.subRole === 'JESTER') {
+      if (Math.random() < 0.005) {
+        const targetVent = STATIONS.vents[Math.floor(Math.random() * STATIONS.vents.length)];
+        bot.aiTargetTask = { x: targetVent.x, y: targetVent.y, visual: false, completed: false };
+      }
+    }
 
     // Respond to any active sabotage (REACTOR, LIGHTS, or COMMS) (#22)
     if (activeSabotage && STATIONS.sabotageFix[activeSabotage.type]) {
@@ -6238,6 +6521,7 @@
     if (ejectedPlayer) {
       ejectedPlayer.alive = false;
       ejectedPlayer.timeOfDeath = performance.now();
+      checkGuardianAngelEligibility(ejectedPlayer);
       for (const b of players) {
         if (b.memory && b.memory.knownKiller === ejectedPlayer.id) {
           b.memory.knownKiller = null;
@@ -6267,7 +6551,7 @@
   // ============================================================================
   function checkWinConditions() {
     const aliveImpostors = getLivingImpostorsCount();
-    const aliveCrew = players.filter(p => p.alive && !p.isImpostor).length;
+    const aliveCrew = players.filter(p => p.alive && !p.isImpostor && p.subRole !== 'JESTER').length;
 
     if (aliveImpostors === 0) {
       triggerGameOver('CREWMATES WIN', 'All Impostors have been eliminated from the starship!');
@@ -6283,8 +6567,14 @@
   function triggerGameOver(title, reason) {
     SFX.stopAmbient();
     const human = getLocalPlayer();
-    const crewWon = title.includes('CREWMATES');
-    const playerWon = human ? (human.isImpostor ? !crewWon : crewWon) : crewWon;
+    let playerWon = false;
+    if (title.includes('JESTER')) {
+      playerWon = human ? (human.subRole === 'JESTER') : false;
+    } else if (title.includes('CREWMATES')) {
+      playerWon = human ? (!human.isImpostor && human.subRole !== 'JESTER') : true;
+    } else {
+      playerWon = human ? human.isImpostor : false;
+    }
     if (playerWon) {
       SFX.victoryFanfare();
     } else {
@@ -7015,6 +7305,45 @@
     ctx.fillStyle = isFellowImpostor ? '#f87171' : '#ffffff';
     ctx.fillText(displayLabel, 0, nameY);
 
+    // Guardian Angel Protective Celestial Bubble & Orbiting Motes
+    if (p.shieldTimer > 0) {
+      ctx.save();
+      const pulse = Math.sin(performance.now() * 0.008) * 3;
+      const shieldR = 28 + pulse;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(0, -6, shieldR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Orbiting celestial halo motes
+      const ang1 = performance.now() * 0.004;
+      ctx.fillStyle = '#bae6fd';
+      ctx.beginPath();
+      ctx.arc(Math.cos(ang1) * shieldR, -6 + Math.sin(ang1) * shieldR, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      const ang2 = ang1 + Math.PI;
+      ctx.beginPath();
+      ctx.arc(Math.cos(ang2) * shieldR, -6 + Math.sin(ang2) * shieldR, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (!p.alive && p.subRole === 'GUARDIAN_ANGEL') {
+      ctx.save();
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = '#7dd3fc';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, -6, 22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
@@ -7269,6 +7598,12 @@
         }
       }
 
+      // Update Celestial Shields & Guardian Angel timers
+      for (const p of players) {
+        if (p.shieldTimer > 0) p.shieldTimer = Math.max(0, p.shieldTimer - dt);
+        if (p.protectCooldown > 0) p.protectCooldown = Math.max(0, p.protectCooldown - dt);
+      }
+
       // Update HUD Buttons & Location using cached DOM references (#31)
       DOM.hudRoom.textContent = `Location: ${getRoomNameAt(human.x, human.y)}${!human.alive ? ' (GHOST)' : ''}`;
 
@@ -7303,6 +7638,23 @@
 
         DOM.btnSabotage.disabled = false;
         DOM.sabLabel.textContent = sabotageCooldown > 0 ? `DOORS (${Math.ceil(sabotageCooldown)}s)` : 'SABOTAGE';
+      } else if (human.subRole === 'SHERIFF') {
+        const killTarget = getNearestKillTarget(human);
+        DOM.btnKill.disabled = !human.alive || human.inVent || human.killCooldown > 0 || !killTarget;
+        DOM.killLabel.textContent = human.killCooldown > 0 ? `SHOOT (${Math.ceil(human.killCooldown)}s)` : 'SHOOT';
+      } else if (human.subRole === 'GUARDIAN_ANGEL') {
+        let nearLiving = null;
+        let nearDist = 180;
+        for (const p of players) {
+          if (!p.alive || p.inVent) continue;
+          const d = Math.hypot(human.x - p.x, human.y - p.y);
+          if (d < nearDist) {
+            nearDist = d;
+            nearLiving = p;
+          }
+        }
+        DOM.btnSpecial.disabled = human.protectCooldown > 0 || !nearLiving;
+        DOM.specialLabel.textContent = human.protectCooldown > 0 ? `PROTECT (${Math.ceil(human.protectCooldown)}s)` : 'PROTECT';
       }
     } else if (state === GAME_STATES.KILL_CUTSCENE && killCutscene) {
       killCutscene.timer -= dt;
@@ -7338,8 +7690,14 @@
     } else if (state === GAME_STATES.VOTING_RESULTS && ejectionAnim) {
       ejectionAnim.timer -= dt;
       if (ejectionAnim.timer <= 0) {
+        const wasJester = ejectionAnim.ejectedPlayer && ejectionAnim.ejectedPlayer.subRole === 'JESTER';
+        const ej = ejectionAnim.ejectedPlayer;
         ejectionAnim = null;
         emergencyCooldown = 15;
+        if (wasJester) {
+          triggerGameOver('JESTER WINS', `${ej.name} successfully deceived the crew into ejecting them! 🃏`);
+          return;
+        }
         if (!checkWinConditions()) {
           state = GAME_STATES.PLAYING;
         }
@@ -7941,12 +8299,16 @@
     }
 
     const line1 = ejectedPlayer
-      ? (matchConfig.confirmEjects
-          ? `${ejectedPlayer.name} ${wasImpostor ? 'was An Impostor.' : 'was not An Impostor.'}`
-          : `${ejectedPlayer.name} was ejected.`)
+      ? (ejectedPlayer.subRole === 'JESTER'
+          ? `${ejectedPlayer.name} was The Jester. 🃏`
+          : (matchConfig.confirmEjects
+              ? `${ejectedPlayer.name} ${wasImpostor ? 'was An Impostor.' : 'was not An Impostor.'}`
+              : `${ejectedPlayer.name} was ejected.`))
       : 'No one was ejected. (Skipped / Tie)';
     const line2 = matchConfig.confirmEjects
-      ? `${remainingImpostors} Impostor${remainingImpostors === 1 ? '' : 's'} remain.`
+      ? (ejectedPlayer && ejectedPlayer.subRole === 'JESTER'
+          ? 'The Jester tricked the entire crew!'
+          : `${remainingImpostors} Impostor${remainingImpostors === 1 ? '' : 's'} remain.`)
       : '';
 
     const charsToShow = Math.min(line1.length, Math.floor(progress * 1.6 * line1.length));

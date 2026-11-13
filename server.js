@@ -384,6 +384,7 @@ function handleClientMessage(client, msg) {
         for (const p of msg.players) {
           room.matchRoles.set(Number(p.id), {
             isImpostor: Boolean(p.isImpostor),
+            subRole: p.subRole || 'NONE',
             alive: Boolean(p.alive),
             lastKillTime: 0
           });
@@ -435,6 +436,22 @@ function handleClientMessage(client, msg) {
         }
         const victimState = room.matchRoles.get(Number(msg.victimId));
         if (victimState) victimState.alive = false;
+      }
+
+      if (msg.action === 'SHERIFF_SHOOT') {
+        // Allow if sender is Sheriff or Host simulating bot
+        if (!isHost && (!roleInfo || roleInfo.subRole !== 'SHERIFF' || !roleInfo.alive)) {
+          return;
+        }
+        const elimState = room.matchRoles.get(Number(msg.eliminatedId));
+        if (elimState) elimState.alive = false;
+      }
+
+      if (msg.action === 'PROTECT') {
+        // Allow if sender is Guardian Angel or Host simulating bot
+        if (!isHost && (!roleInfo || roleInfo.subRole !== 'GUARDIAN_ANGEL')) {
+          return;
+        }
       }
 
       if (msg.action === 'SABOTAGE' || msg.action === 'DOOR_LOCK') {
