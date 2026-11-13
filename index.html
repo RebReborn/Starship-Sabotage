@@ -1882,6 +1882,7 @@
   const SFX = (() => {
     let actx = null;
     let muted = false;
+    let ambientNodes = null;
 
     function ctx() {
       if (muted) return null;
@@ -1909,10 +1910,88 @@
       osc.stop(c.currentTime + dur);
     }
 
+    function startAmbientDrone() {
+      if (muted || ambientNodes) return;
+      const c = ctx();
+      if (!c) return;
+      try {
+        const osc1 = c.createOscillator();
+        const osc2 = c.createOscillator();
+        const filter = c.createBiquadFilter();
+        const gain = c.createGain();
+
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(54, c.currentTime);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(108, c.currentTime);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(160, c.currentTime);
+        filter.Q.setValueAtTime(2.5, c.currentTime);
+
+        gain.gain.setValueAtTime(0.001, c.currentTime);
+        gain.gain.linearRampToValueAtTime(0.04, c.currentTime + 1.2);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(c.destination);
+
+        osc1.start();
+        osc2.start();
+        ambientNodes = { osc1, osc2, filter, gain };
+      } catch (_) {}
+    }
+
+    function stopAmbientDrone() {
+      if (!ambientNodes) return;
+      try {
+        const c = ctx();
+        if (c && ambientNodes.gain) {
+          ambientNodes.gain.gain.linearRampToValueAtTime(0.001, c.currentTime + 0.3);
+        }
+        setTimeout(() => {
+          if (ambientNodes) {
+            try { ambientNodes.osc1.stop(); ambientNodes.osc2.stop(); } catch (_) {}
+            ambientNodes = null;
+          }
+        }, 350);
+      } catch (_) {
+        ambientNodes = null;
+      }
+    }
+
     return {
       toggleMute() {
         muted = !muted;
+        if (muted) {
+          stopAmbientDrone();
+        } else if (state === GAME_STATES.PLAYING) {
+          startAmbientDrone();
+        }
         return muted;
+      },
+      startAmbient() {
+        startAmbientDrone();
+      },
+      stopAmbient() {
+        stopAmbientDrone();
+      },
+      updateAmbient(isSabotageActive, isCritical) {
+        if (!ambientNodes) return;
+        const c = ctx();
+        if (!c) return;
+        try {
+          if (isSabotageActive) {
+            ambientNodes.osc1.frequency.setValueAtTime(isCritical ? 72 : 62, c.currentTime);
+            ambientNodes.filter.frequency.setValueAtTime(isCritical ? 340 : 220, c.currentTime);
+            ambientNodes.gain.gain.setValueAtTime(isCritical ? 0.075 : 0.055, c.currentTime);
+          } else {
+            ambientNodes.osc1.frequency.setValueAtTime(54, c.currentTime);
+            ambientNodes.filter.frequency.setValueAtTime(160, c.currentTime);
+            ambientNodes.gain.gain.setValueAtTime(0.04, c.currentTime);
+          }
+        } catch (_) {}
       },
       step()    { tone(110 + Math.random() * 25, 0.045, 'triangle', 0.04, 65); },
       beep(f = 660) { tone(f, 0.08, 'sine', 0.1); },
@@ -1925,16 +2004,44 @@
         setTimeout(() => tone(783.99, 0.24, 'triangle', 0.16), 180);
       },
       vent()    { tone(240, 0.16, 'square', 0.12, 95); },
+      ventSteam(){
+        tone(450, 0.18, 'sawtooth', 0.09, 120);
+        setTimeout(() => tone(220, 0.15, 'triangle', 0.07, 70), 50);
+      },
       kill()    {
         tone(140, 0.45, 'sawtooth', 0.24, 42);
         setTimeout(() => tone(620, 0.18, 'square', 0.18, 120), 60);
+      },
+      killStinger() {
+        tone(55, 0.55, 'sawtooth', 0.28, 32);
+        tone(440, 0.35, 'sawtooth', 0.15, 220);
+        setTimeout(() => tone(466.16, 0.35, 'sawtooth', 0.14, 233), 40);
       },
       alarm()   {
         tone(740, 0.18, 'sawtooth', 0.16, 520);
         setTimeout(() => tone(880, 0.25, 'sawtooth', 0.18, 440), 190);
       },
       siren()   { tone(440, 0.32, 'sawtooth', 0.08, 620); },
-      eject()   { tone(95, 0.6, 'triangle', 0.12, 55); }
+      eject()   { tone(95, 0.6, 'triangle', 0.12, 55); },
+      typewriter() {
+        tone(1100 + Math.random() * 200, 0.018, 'sine', 0.06);
+      },
+      heartbeat() {
+        tone(58, 0.12, 'sine', 0.18);
+        setTimeout(() => tone(48, 0.14, 'sine', 0.16), 150);
+      },
+      victoryFanfare() {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((f, i) => {
+          setTimeout(() => tone(f, 0.28, 'triangle', 0.16), i * 110);
+        });
+      },
+      defeatFanfare() {
+        const notes = [392.00, 311.13, 261.63, 130.81];
+        notes.forEach((f, i) => {
+          setTimeout(() => tone(f, 0.38, 'sawtooth', 0.14), i * 140);
+        });
+      }
     };
   })();
 
@@ -2245,6 +2352,115 @@
   let camerasWatched = false;
   let klaxonTimer = 0;
   let netSyncAccumulator = 0;
+
+  // ============================================================================
+  // 3.1 DYNAMIC PROCEDURAL SCREEN SHAKE & KINETIC PARTICLES (#5)
+  // ============================================================================
+  const ScreenShake = {
+    trauma: 0,
+    maxOffset: 22,
+    maxAngle: 0.042,
+    trigger(intensity = 0.5) {
+      if (matchConfig.reducedMotion) return;
+      this.trauma = Math.min(1.0, this.trauma + intensity);
+    },
+    update(dt) {
+      if (this.trauma > 0) {
+        this.trauma = Math.max(0, this.trauma - dt * 1.55);
+      }
+    },
+    getOffset() {
+      if (this.trauma <= 0.001 || matchConfig.reducedMotion) {
+        return { x: 0, y: 0, rot: 0 };
+      }
+      const shake = this.trauma * this.trauma;
+      const angle = (Math.random() * 2 - 1) * this.maxAngle * shake;
+      const offsetX = (Math.random() * 2 - 1) * this.maxOffset * shake;
+      const offsetY = (Math.random() * 2 - 1) * this.maxOffset * shake;
+      return { x: offsetX, y: offsetY, rot: angle };
+    }
+  };
+
+  let particles = [];
+  const MAX_PARTICLES = 180;
+
+  function spawnParticle(p) {
+    if (matchConfig.reducedMotion) return;
+    if (particles.length >= MAX_PARTICLES) particles.shift();
+    particles.push({
+      x: p.x,
+      y: p.y,
+      vx: p.vx || (Math.random() * 2 - 1) * 30,
+      vy: p.vy || (Math.random() * 2 - 1) * 30,
+      size: p.size || 3,
+      color: p.color || '#38bdf8',
+      life: p.life || 0.6,
+      maxLife: p.life || 0.6,
+      alpha: p.alpha !== undefined ? p.alpha : 1,
+      glow: Boolean(p.glow),
+      shape: p.shape || 'circle'
+    });
+  }
+
+  function spawnBurst(x, y, count = 12, color = '#ef4444', speed = 80, life = 0.6, shape = 'circle') {
+    if (matchConfig.reducedMotion) return;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const spd = (Math.random() * 0.7 + 0.3) * speed;
+      spawnParticle({
+        x: x + (Math.random() * 6 - 3),
+        y: y + (Math.random() * 6 - 3),
+        vx: Math.cos(angle) * spd,
+        vy: Math.sin(angle) * spd,
+        size: Math.random() * 3 + 2,
+        color: color,
+        life: life * (0.6 + Math.random() * 0.7),
+        shape: shape,
+        glow: true
+      });
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        particles.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= (1 - dt * 1.5);
+      p.vy *= (1 - dt * 1.5);
+    }
+  }
+
+  function drawParticles(ctx) {
+    if (!particles.length) return;
+    ctx.save();
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const progress = p.life / p.maxLife;
+      const alpha = Math.max(0, Math.min(1, p.alpha * progress));
+      ctx.globalAlpha = alpha;
+      if (p.glow) {
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+      ctx.fillStyle = p.color;
+      if (p.shape === 'spark') {
+        ctx.fillRect(p.x - p.size, p.y - 1, p.size * 2, 2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (progress * 0.6 + 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
 
   function getLocalPlayer() {
     for (let i = 0; i < players.length; i++) {
@@ -3307,6 +3523,7 @@
     camera.x = human.x;
     camera.y = human.y;
     camera.initialized = true;
+    SFX.startAmbient();
 
     if (human.isImpostor) {
       DOM.hudRole.textContent = 'IMPOSTOR';
@@ -3342,6 +3559,8 @@
     shiftResidues = [];
     activeLaserBursts = [];
     ventAnimations = [];
+    particles = [];
+    ScreenShake.trauma = 0;
     matchEventsLog = [];
     matchStats = {
       killsByPlayer: {},
@@ -3673,6 +3892,7 @@
           venter.currentVentId = msg.ventId || null;
           if (msg.x !== undefined) { venter.x = msg.x; venter.y = msg.y; venter.netX = msg.x; venter.netY = msg.y; }
           ventAnimations.push({ x: venter.x, y: venter.y, timer: 0.4 });
+          spawnBurst(venter.x, venter.y, 14, '#e2e8f0', 48, 0.5);
         }
         break;
       }
@@ -3739,6 +3959,9 @@
   }
 
   function returnToLobbyScreen(notifyHost = true) {
+    SFX.stopAmbient();
+    ScreenShake.trauma = 0;
+    particles = [];
     clearMeetingTimeouts();
     closeTaskModal();
     DOM.gameOverOverlay.classList.remove('active');
@@ -4169,6 +4392,9 @@
 
   function executeKill(killer, victim, showCutscene, fromNetwork = false) {
     SFX.kill();
+    SFX.killStinger();
+    ScreenShake.trigger(0.75);
+    spawnBurst(victim.x, victim.y, 28, '#ef4444', 120, 0.75);
     victim.alive = false;
     victim.timeOfDeath = performance.now();
     matchStats.killsByPlayer[killer.id] = (matchStats.killsByPlayer[killer.id] || 0) + 1;
@@ -4242,6 +4468,8 @@
 
     if (human.inVent) {
       SFX.vent();
+      SFX.ventSteam();
+      spawnBurst(human.x, human.y, 16, '#e2e8f0', 50, 0.55);
       human.inVent = false;
       ventAnimations.push({ x: human.x, y: human.y, timer: 0.4 });
       human.currentVentId = null;
@@ -4250,6 +4478,8 @@
       const nearVent = STATIONS.vents.find(v => Math.hypot(human.x - v.x, human.y - v.y) < CONFIG.VENT_INTERACT_RANGE);
       if (nearVent) {
         SFX.vent();
+        SFX.ventSteam();
+        spawnBurst(nearVent.x, nearVent.y, 16, '#e2e8f0', 50, 0.55);
         human.inVent = true;
         human.currentVentId = nearVent.id;
         human.x = nearVent.x;
@@ -4319,6 +4549,7 @@
   function triggerSabotage(type, fromNetwork = false) {
     if (!fromNetwork && (activeSabotage || sabotageCooldown > 0)) return;
     SFX.alarm();
+    ScreenShake.trigger(0.45);
     activeSabotage = {
       type,
       timer: type === 'REACTOR' ? 38 : 999
@@ -4650,6 +4881,8 @@
       const mx = (clientX - rect.left) * scaleX;
       const my = (clientY - rect.top) * scaleY;
       SFX.laser();
+      ScreenShake.trigger(0.2);
+      spawnBurst(2260, 340, 6, '#34d399', 65, 0.25, 'spark');
       lasers.push({ x: mx, y: my, t: 0.15 });
 
       // Fire visible exterior ship cannon burst so witnesses see the Visual Task!
@@ -5541,6 +5774,7 @@
       });
     }
     SFX.alarm();
+    ScreenShake.trigger(0.65);
     clearMeetingTimeouts();
     closeTaskModal();
     showMinimap = false;
@@ -6047,6 +6281,15 @@
   }
 
   function triggerGameOver(title, reason) {
+    SFX.stopAmbient();
+    const human = getLocalPlayer();
+    const crewWon = title.includes('CREWMATES');
+    const playerWon = human ? (human.isImpostor ? !crewWon : crewWon) : crewWon;
+    if (playerWon) {
+      SFX.victoryFanfare();
+    } else {
+      SFX.defeatFanfare();
+    }
     clearMeetingTimeouts();
     closeTaskModal();
     if (DOM.virtualJoystick) DOM.virtualJoystick.style.display = 'none';
@@ -6818,6 +7061,9 @@
   // 13. MAIN UPDATE & RENDER LOOP
   // ============================================================================
   function update(dt) {
+    ScreenShake.update(dt);
+    updateParticles(dt);
+
     if (DOM.ghostChatWrap) {
       const h = getLocalPlayer();
       DOM.ghostChatWrap.style.display = (state === GAME_STATES.PLAYING && h && !h.alive) ? 'flex' : 'none';
@@ -6826,6 +7072,39 @@
     if (state === GAME_STATES.PLAYING || state === GAME_STATES.TASK_MODAL) {
       const human = getLocalPlayer();
       if (!human) return;
+
+      // Dynamic Audio Drone, Heartbeat Tension & Room Particle Emitters
+      const isMeltdownCritical = Boolean(activeSabotage && activeSabotage.type === 'REACTOR' && activeSabotage.timer < 12);
+      SFX.updateAmbient(Boolean(activeSabotage), isMeltdownCritical);
+      if (isMeltdownCritical && Math.random() < dt * 1.4) {
+        SFX.heartbeat();
+      }
+
+      if (Math.random() < dt * 5) {
+        spawnParticle({
+          x: 250 + Math.random() * 110,
+          y: 1210 + Math.random() * 140,
+          vx: (Math.random() - 0.5) * 22,
+          vy: -Math.random() * 32 - 12,
+          size: Math.random() * 2.5 + 1.5,
+          color: '#ec4899',
+          life: 0.85,
+          glow: true
+        });
+      }
+      if (Math.random() < dt * 3.5) {
+        spawnParticle({
+          x: 1320 + Math.random() * 40,
+          y: 1140 + Math.random() * 180,
+          vx: (Math.random() - 0.5) * 65,
+          vy: (Math.random() - 0.5) * 65,
+          size: 2,
+          color: '#facc15',
+          life: 0.35,
+          shape: 'spark',
+          glow: true
+        });
+      }
 
       // Cooldowns
       if (emergencyCooldown > 0) emergencyCooldown = Math.max(0, emergencyCooldown - dt);
@@ -7089,9 +7368,11 @@
     ctx.fillStyle = '#05070d';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Apply smoothed camera & responsive viewport zoom (#15)
+    // Apply smoothed camera & responsive viewport zoom (#15) + Dynamic Screen Shake
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    const shake = ScreenShake.getOffset();
+    ctx.translate(canvas.width / 2 + shake.x, canvas.height / 2 + shake.y);
+    if (shake.rot !== 0) ctx.rotate(shake.rot);
     ctx.scale(camera.zoom, camera.zoom);
     ctx.translate(-camera.x, -camera.y);
 
@@ -7401,7 +7682,34 @@
       }
     }
 
+    // 12C. Kinetic Particle System (rendered in world coordinates)
+    drawParticles(ctx);
+
     ctx.restore();
+
+    // 12D. Atmosphere & Sabotage Emergency Overlays (rendered in screen space)
+    if (state === GAME_STATES.PLAYING) {
+      if (activeSabotage && activeSabotage.type === 'REACTOR') {
+        const sweep = (Math.sin(performance.now() * 0.007) + 1) * 0.5;
+        ctx.fillStyle = `rgba(239, 68, 68, ${0.08 + sweep * 0.14})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else if (activeSabotage && activeSabotage.type === 'LIGHTS') {
+        const flicker = (Math.random() < 0.08) ? 0.35 : (Math.sin(performance.now() * 0.012) * 0.05 + 0.12);
+        ctx.fillStyle = `rgba(3, 5, 12, ${flicker})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      if (human.alive) {
+        const vGrad = ctx.createRadialGradient(
+          canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) * 0.44,
+          canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.74
+        );
+        vGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vGrad.addColorStop(1, 'rgba(3, 6, 14, 0.52)');
+        ctx.fillStyle = vGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
 
     // 12B. Toggleable Tactical Minimap Overlay ([TAB])
     if (showMinimap && state === GAME_STATES.PLAYING) {
@@ -7554,18 +7862,41 @@
     const slideOffset = matchConfig.reducedMotion ? 15 : (progress * 45);
     drawAstronaut(ctx, cutsceneDummyKiller, cx - 120 + slideOffset, cy + 25, 2.2);
 
-    ctx.strokeStyle = '#f87171';
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx - 50, cy + 5);
-    ctx.lineTo(cx + 85, cy + 5);
-    ctx.stroke();
+    // Glowing dynamic neon slash & impact flash
+    if (progress >= 0.32 && progress <= 0.72) {
+      ctx.save();
+      ctx.shadowColor = '#ef4444';
+      ctx.shadowBlur = 24;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx - 50, cy + 25);
+      ctx.lineTo(cx + 90, cy - 15);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (progress >= 0.46 && progress <= 0.53 && !matchConfig.reducedMotion) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.fillRect(0, cy - 110, canvas.width, 220);
+    }
 
     if (progress < 0.55) {
       drawAstronaut(ctx, cutsceneDummyVictim, cx + 110, cy + 25, 2.2);
     } else {
       drawDeadBody(ctx, cutsceneDummyVictim, cx + 115, cy + 35);
+
+      // Kinetic blood splatter droplets during cutscene impact
+      ctx.fillStyle = '#ef4444';
+      const sprayT = (progress - 0.52) * 110;
+      for (let i = 0; i < 8; i++) {
+        const dropX = cx + 115 + Math.cos(i * 0.8) * sprayT * (0.8 + (i % 3) * 0.3);
+        const dropY = cy + 20 + Math.sin(i * 0.8) * sprayT * 0.7 + (sprayT * sprayT * 0.015);
+        ctx.beginPath();
+        ctx.arc(dropX, dropY, Math.max(1, 4 - i * 0.3), 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     ctx.fillStyle = '#ffffff';
@@ -7618,7 +7949,11 @@
       ? `${remainingImpostors} Impostor${remainingImpostors === 1 ? '' : 's'} remain.`
       : '';
 
-    const charsToShow = Math.floor(progress * 1.6 * line1.length);
+    const charsToShow = Math.min(line1.length, Math.floor(progress * 1.6 * line1.length));
+    if (charsToShow > (ejectionAnim.revealedChars || 0)) {
+      SFX.typewriter();
+      ejectionAnim.revealedChars = charsToShow;
+    }
     ctx.fillStyle = '#f8fafc';
     ctx.font = 'bold 28px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
