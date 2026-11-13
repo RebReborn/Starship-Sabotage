@@ -223,7 +223,39 @@ function handleClientMessage(client, msg) {
 
   switch (msg.type) {
     case 'PING': {
-      sendJson(client, { type: 'PONG' });
+      sendJson(client, { type: 'PONG', clientTime: msg.clientTime });
+      break;
+    }
+
+    case 'LOBBY_CHAT': {
+      const room = rooms.get(client.roomCode);
+      if (!room) return;
+      const text = String(msg.text || '').trim().slice(0, 100);
+      if (!text) return;
+      broadcastRoom(room, {
+        type: 'LOBBY_CHAT',
+        senderSlotId: client.slotId,
+        senderName: client.name,
+        colorIdx: client.colorIdx,
+        hatId: client.hatId || 'none',
+        text
+      });
+      break;
+    }
+
+    case 'GHOST_CHAT': {
+      const room = rooms.get(client.roomCode);
+      if (!room) return;
+      const text = String(msg.text || '').trim().slice(0, 100);
+      if (!text) return;
+      broadcastRoom(room, {
+        type: 'GHOST_CHAT',
+        senderSlotId: client.slotId,
+        senderName: client.name,
+        colorIdx: client.colorIdx,
+        hatId: client.hatId || 'none',
+        text
+      });
       break;
     }
 

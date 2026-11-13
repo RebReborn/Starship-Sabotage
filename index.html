@@ -899,6 +899,149 @@
       padding: 2px 6px;
       border-radius: 4px;
     }
+
+    /* LOBBY CHAT */
+    .lobby-chat-wrap {
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+      padding-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .lobby-chat-log {
+      max-height: 85px;
+      min-height: 40px;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .lobby-chat-row {
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .lobby-chat-input-row {
+      display: flex;
+      gap: 6px;
+    }
+    .lobby-chat-input {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: #fff;
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 6px;
+    }
+
+    /* IN-GAME GHOST RADIO */
+    .ghost-chat-wrap {
+      position: absolute;
+      bottom: 80px;
+      left: 20px;
+      width: 290px;
+      background: rgba(10, 15, 30, 0.88);
+      border: 1px solid #38bdf8;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);
+      backdrop-filter: blur(6px);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .ghost-chat-hdr {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #7dd3fc;
+      letter-spacing: 0.5px;
+    }
+    .ghost-chat-log {
+      max-height: 95px;
+      min-height: 50px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* POST-GAME AWARDS & STATS */
+    .award-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .award-card {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+      transition: transform 0.12s;
+    }
+    .award-card:hover {
+      transform: translateY(-2px);
+      border-color: #38bdf8;
+    }
+    .award-icon {
+      font-size: 22px;
+      margin-bottom: 2px;
+    }
+    .award-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .award-name {
+      font-size: 12px;
+      font-weight: 900;
+      color: #fde047;
+      margin-top: 2px;
+    }
+    .stats-bar {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 12px;
+      font-size: 11.5px;
+    }
+    .stat-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+    }
+    .stat-chip-val {
+      font-size: 15px;
+      font-weight: 900;
+      color: #38bdf8;
+      font-family: monospace;
+    }
+    .stat-chip-lbl {
+      font-size: 9.5px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
   </style>
 </head>
 <body>
@@ -932,7 +1075,23 @@
           <button class="util-btn" id="btnMapToggle">🗺️ MAP [TAB]</button>
           <button class="util-btn" id="btnColorblindToggle">👁️ CB: OFF [C]</button>
           <button class="util-btn" id="btnAudioToggle">🔊 SFX: ON [M]</button>
+          <span class="util-btn" id="hudPingBadge" style="cursor:default; display:none; background:#0f172a; border-color:#334155; color:#38bdf8; font-family:monospace; font-weight:800;">📶 --ms</span>
         </div>
+      </div>
+    </div>
+
+    <!-- GHOST RADIO CHAT (DEAD PLAYERS ONLY) -->
+    <div class="ghost-chat-wrap" id="ghostChatWrap" style="display:none;">
+      <div class="ghost-chat-hdr">
+        <span>👻 GHOST RADIO (Dead Crew)</span>
+        <span style="font-size:10px; color:#94a3b8;">[Enter]</span>
+      </div>
+      <div class="ghost-chat-log" id="ghostChatLog">
+        <span style="color:#64748b; font-style:italic;">Ghost channel connected. Living crew cannot hear you.</span>
+      </div>
+      <div style="display:flex; gap:4px;">
+        <input type="text" id="ghostChatInput" class="lobby-chat-input" placeholder="Radio other ghosts..." maxlength="80" />
+        <button class="mp-btn" id="ghostChatSendBtn" style="padding:4px 8px; font-size:10px;">SEND</button>
       </div>
     </div>
 
@@ -992,6 +1151,7 @@
             <div style="font-weight:900; font-size:13px; color:#38bdf8; display:flex; align-items:center; gap:8px;">
               <span>🌐 ONLINE MULTIPLAYER LOBBY</span>
               <span id="mpServerStatus" style="font-size:11px; font-weight:700; color:#94a3b8;">(Connecting...)</span>
+              <span id="lobbyPingBadge" style="font-size:11px; font-weight:800; font-family:monospace; color:#38bdf8; display:none;">📶 --ms</span>
             </div>
             <div id="mpStatusSub" style="font-size:11.5px; color:#cbd5e1; margin-top:2px;">
               Host a 6-digit Room Code for friends or play solo with AI bots!
@@ -1017,6 +1177,21 @@
           </div>
           <div class="mp-public-list" id="mpPublicRoomsList">
             <span>No open public rooms right now.</span>
+          </div>
+        </div>
+
+        <!-- LOBBY CHAT (VISIBLE WHEN IN ROOM) -->
+        <div class="lobby-chat-wrap" id="lobbyChatWrap" style="display:none;">
+          <div style="font-size:11px; font-weight:800; color:#38bdf8; display:flex; justify-content:space-between; align-items:center;">
+            <span>💬 LOBBY CREW CHAT</span>
+            <span style="color:#94a3b8; font-size:10px;">Press Enter to send</span>
+          </div>
+          <div class="lobby-chat-log" id="lobbyChatLog">
+            <span style="color:#64748b; font-style:italic;">Welcome to the room! Plan with your crew before launch.</span>
+          </div>
+          <div class="lobby-chat-input-row">
+            <input type="text" id="lobbyChatInput" class="lobby-chat-input" placeholder="Chat with crew before launch..." maxlength="80" />
+            <button class="mp-btn" id="lobbyChatSendBtn" style="padding:4px 10px; font-size:11px;">SEND</button>
           </div>
         </div>
       </div>
@@ -1175,11 +1350,23 @@
 
   <!-- GAME OVER OVERLAY -->
   <div class="overlay" id="gameOverOverlay">
-    <div class="card" style="text-align:center; max-width:640px;">
+    <div class="card" style="text-align:center; max-width:680px;">
       <h1 id="gameOverTitle" style="font-size:38px; margin-bottom:6px;">VICTORY</h1>
       <p id="gameOverReason" style="font-size:15px; color:#cbd5e1; margin-bottom:14px;"></p>
-      <div id="gameOverRoster" style="margin-bottom:14px; font-size:13px; color:#94a3b8; text-align:left;"></div>
-      <div id="gameOverTimeline" style="margin-bottom:18px; max-height:135px; overflow-y:auto; background:#090d16; border:1px solid #334155; border-radius:8px; padding:8px 12px; font-size:12px; color:#cbd5e1; text-align:left;"></div>
+
+      <!-- MVP & HIGHLIGHT AWARDS -->
+      <div class="award-grid" id="gameOverAwards"></div>
+
+      <!-- ANALYTICS SUMMARY BAR -->
+      <div class="stats-bar" id="gameOverStatsBar"></div>
+
+      <!-- MANIFEST -->
+      <div id="gameOverRoster" style="margin-bottom:12px; font-size:13px; color:#94a3b8; text-align:left;"></div>
+
+      <!-- TOGGLE TIMELINE -->
+      <button class="util-btn" id="toggleTimelineBtn" style="width:100%; margin-bottom:10px; padding:6px; font-size:11.5px;">📜 View Detailed Mission Log</button>
+      <div id="gameOverTimeline" style="display:none; margin-bottom:18px; max-height:135px; overflow-y:auto; background:#090d16; border:1px solid #334155; border-radius:8px; padding:8px 12px; font-size:12px; color:#cbd5e1; text-align:left;"></div>
+
       <button class="primary-btn" id="returnLobbyBtn">PLAY AGAIN</button>
     </div>
   </div>
@@ -1344,6 +1531,19 @@
     voterGrid: document.getElementById('voterGrid'),
     skipVoteBtn: document.getElementById('skipVoteBtn'),
     voteStatusText: document.getElementById('voteStatusText'),
+    hudPingBadge: document.getElementById('hudPingBadge'),
+    lobbyPingBadge: document.getElementById('lobbyPingBadge'),
+    lobbyChatWrap: document.getElementById('lobbyChatWrap'),
+    lobbyChatLog: document.getElementById('lobbyChatLog'),
+    lobbyChatInput: document.getElementById('lobbyChatInput'),
+    lobbyChatSendBtn: document.getElementById('lobbyChatSendBtn'),
+    ghostChatWrap: document.getElementById('ghostChatWrap'),
+    ghostChatLog: document.getElementById('ghostChatLog'),
+    ghostChatInput: document.getElementById('ghostChatInput'),
+    ghostChatSendBtn: document.getElementById('ghostChatSendBtn'),
+    gameOverAwards: document.getElementById('gameOverAwards'),
+    gameOverStatsBar: document.getElementById('gameOverStatsBar'),
+    toggleTimelineBtn: document.getElementById('toggleTimelineBtn'),
     gameOverOverlay: document.getElementById('gameOverOverlay'),
     gameOverTitle: document.getElementById('gameOverTitle'),
     gameOverReason: document.getElementById('gameOverReason'),
@@ -1780,6 +1980,24 @@
   // Meeting state
   let meetingData = null;
 
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  let matchStats = {
+    killsByPlayer: {},
+    tasksDoneByPlayer: {},
+    votesReceivedByPlayer: {},
+    meetingsByPlayer: {},
+    sabotagesFixed: 0,
+    meetingsCalled: 0
+  };
+
   function logMatchEvent(text) {
     const sec = Math.round(performance.now() / 1000);
     matchEventsLog.push(`[T+${sec}s] ${text}`);
@@ -2025,6 +2243,43 @@
       this.connectSocket();
     },
 
+    sendPing() {
+      if (this.ws && this.wsConnected && this.ws.readyState === 1) {
+        this.ws.send(JSON.stringify({ type: 'PING', clientTime: performance.now() }));
+      }
+    },
+
+    sendLobbyChat(rawText) {
+      const text = String(rawText || '').trim().slice(0, 80);
+      if (!text || !this.inRoom) return;
+      if (this.wsConnected) {
+        this.sendRaw({ type: 'LOBBY_CHAT', text });
+      } else if (this.bc) {
+        const payload = {
+          type: 'LOBBY_CHAT',
+          senderSlotId: this.mySlotId,
+          senderName: sanitizeName(DOM.playerNameInput.value),
+          colorIdx: selectedSuitIndex,
+          hatId: selectedHatId,
+          text
+        };
+        this.bc.postMessage(payload);
+        this.appendLobbyChat(payload);
+      }
+    },
+
+    appendLobbyChat(msg) {
+      if (!DOM.lobbyChatLog) return;
+      const col = SUIT_COLORS[msg.colorIdx] || SUIT_COLORS[0];
+      const hatMeta = HATS_BY_ID[msg.hatId] || HATS[0];
+      const hatIcon = (hatMeta && hatMeta.id !== 'none') ? `${hatMeta.icon} ` : '';
+      const row = document.createElement('div');
+      row.className = 'lobby-chat-row';
+      row.innerHTML = `<b style="color:${col.hex}">${hatIcon}${escapeHtml(msg.senderName)}:</b> <span style="color:#e2e8f0">${escapeHtml(msg.text)}</span>`;
+      DOM.lobbyChatLog.appendChild(row);
+      DOM.lobbyChatLog.scrollTop = DOM.lobbyChatLog.scrollHeight;
+    },
+
     connectSocket() {
       if (!this.wsUrl || typeof WebSocket === 'undefined') return;
       if (this.ws && (this.ws.readyState === 0 || this.ws.readyState === 1)) return;
@@ -2044,12 +2299,11 @@
           this.wsConnecting = false;
           this.updateLobbyUI();
           this.refreshPublicRooms();
+          this.sendPing();
           if (this.pingTimer) clearInterval(this.pingTimer);
           this.pingTimer = setInterval(() => {
-            if (this.ws && this.ws.readyState === 1) {
-              this.ws.send('{"type":"PING"}');
-            }
-          }, 25000);
+            this.sendPing();
+          }, 3500);
         };
         socket.onmessage = (ev) => {
           try {
@@ -2062,6 +2316,8 @@
             clearInterval(this.pingTimer);
             this.pingTimer = null;
           }
+          if (DOM.lobbyPingBadge) DOM.lobbyPingBadge.style.display = 'none';
+          if (DOM.hudPingBadge) DOM.hudPingBadge.style.display = 'none';
           const wasInWsRoom = this.inRoom && !this.bc;
           this.wsConnected = false;
           this.wsConnecting = false;
@@ -2091,10 +2347,14 @@
         };
         socket.onerror = () => {
           this.wsConnected = false;
+          if (DOM.lobbyPingBadge) DOM.lobbyPingBadge.style.display = 'none';
+          if (DOM.hudPingBadge) DOM.hudPingBadge.style.display = 'none';
         };
       } catch (_) {
         this.wsConnected = false;
         this.wsConnecting = false;
+        if (DOM.lobbyPingBadge) DOM.lobbyPingBadge.style.display = 'none';
+        if (DOM.hudPingBadge) DOM.hudPingBadge.style.display = 'none';
         this.updateStatusUI();
       }
     },
@@ -2375,6 +2635,8 @@
       }
 
       if (!this.inRoom) {
+        if (DOM.lobbyChatWrap) DOM.lobbyChatWrap.style.display = 'none';
+        if (DOM.lobbyPingBadge) DOM.lobbyPingBadge.style.display = this.wsConnected ? 'inline-block' : 'none';
         if (DOM.mpVisibilityBtn) DOM.mpVisibilityBtn.style.display = 'inline-block';
         DOM.mpHostBtn.style.display = 'inline-block';
         DOM.mpCodeInput.style.display = 'inline-block';
@@ -2393,6 +2655,8 @@
         return;
       }
 
+      if (DOM.lobbyChatWrap) DOM.lobbyChatWrap.style.display = 'flex';
+      if (DOM.lobbyPingBadge) DOM.lobbyPingBadge.style.display = this.wsConnected ? 'inline-block' : 'none';
       const amHost = this.isHost();
       if (DOM.mpVisibilityBtn) {
         DOM.mpVisibilityBtn.style.display = (amHost && this.wsConnected) ? 'inline-block' : 'none';
@@ -2445,6 +2709,38 @@
       if (!msg || typeof msg !== 'object') return;
 
       switch (msg.type) {
+        case 'PONG': {
+          if (typeof msg.clientTime === 'number') {
+            const rtt = Math.max(1, Math.round(performance.now() - msg.clientTime));
+            const color = rtt < 85 ? '#4ade80' : (rtt < 170 ? '#fbbf24' : '#f87171');
+            const txt = `📶 ${rtt}ms`;
+            if (DOM.lobbyPingBadge) {
+              DOM.lobbyPingBadge.textContent = txt;
+              DOM.lobbyPingBadge.style.color = color;
+              DOM.lobbyPingBadge.style.display = 'inline-block';
+            }
+            if (DOM.hudPingBadge) {
+              DOM.hudPingBadge.textContent = txt;
+              DOM.hudPingBadge.style.color = color;
+              DOM.hudPingBadge.style.display = (state === GAME_STATES.PLAYING) ? 'inline-block' : 'none';
+            }
+          }
+          break;
+        }
+
+        case 'LOBBY_CHAT': {
+          this.appendLobbyChat(msg);
+          break;
+        }
+
+        case 'GHOST_CHAT': {
+          const human = getLocalPlayer();
+          if (human && !human.alive) {
+            appendGhostChat(msg);
+          }
+          break;
+        }
+
         case 'PUBLIC_ROOMS': {
           this.publicRooms = Array.isArray(msg.rooms) ? msg.rooms : [];
           this.renderPublicRooms();
@@ -2607,6 +2903,88 @@
     try { localStorage.setItem('starship_name', DOM.playerNameInput.value); } catch (_) {}
   });
   DOM.playerNameInput.addEventListener('change', () => NetEngine.updateProfile());
+
+  function sendGhostChat(rawText) {
+    const text = String(rawText || '').trim().slice(0, 80);
+    if (!text) return;
+    const human = getLocalPlayer();
+    if (!human || human.alive) return;
+
+    const payload = {
+      type: 'GHOST_CHAT',
+      senderSlotId: NetEngine.inRoom ? NetEngine.mySlotId : 0,
+      senderName: human.name,
+      colorIdx: human.color ? SUIT_COLORS.indexOf(human.color) : selectedSuitIndex,
+      hatId: human.hatId || selectedHatId,
+      text
+    };
+
+    if (NetEngine.wsConnected && NetEngine.inRoom) {
+      NetEngine.sendRaw({ type: 'GHOST_CHAT', text });
+    } else if (NetEngine.bc && NetEngine.inRoom) {
+      NetEngine.bc.postMessage(payload);
+      appendGhostChat(payload);
+    } else {
+      appendGhostChat(payload);
+    }
+  }
+
+  function appendGhostChat(msg) {
+    if (!DOM.ghostChatLog) return;
+    const col = SUIT_COLORS[msg.colorIdx] || SUIT_COLORS[0];
+    const hatMeta = HATS_BY_ID[msg.hatId] || HATS[0];
+    const hatIcon = (hatMeta && hatMeta.id !== 'none') ? `${hatMeta.icon} ` : '';
+    const row = document.createElement('div');
+    row.style.lineHeight = '1.35';
+    row.style.wordBreak = 'break-word';
+    row.innerHTML = `<span style="color:#7dd3fc">👻</span> <b style="color:${col.hex}">${hatIcon}${escapeHtml(msg.senderName)}:</b> <span style="color:#e2e8f0">${escapeHtml(msg.text)}</span>`;
+    DOM.ghostChatLog.appendChild(row);
+    DOM.ghostChatLog.scrollTop = DOM.ghostChatLog.scrollHeight;
+  }
+
+  if (DOM.lobbyChatSendBtn && DOM.lobbyChatInput) {
+    const doSendLobby = () => {
+      const val = DOM.lobbyChatInput.value;
+      if (val && val.trim()) {
+        NetEngine.sendLobbyChat(val);
+        DOM.lobbyChatInput.value = '';
+      }
+    };
+    DOM.lobbyChatSendBtn.addEventListener('click', doSendLobby);
+    DOM.lobbyChatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.stopPropagation();
+        doSendLobby();
+      }
+    });
+  }
+
+  if (DOM.ghostChatSendBtn && DOM.ghostChatInput) {
+    const doSendGhost = () => {
+      const val = DOM.ghostChatInput.value;
+      if (val && val.trim()) {
+        sendGhostChat(val);
+        DOM.ghostChatInput.value = '';
+      }
+    };
+    DOM.ghostChatSendBtn.addEventListener('click', doSendGhost);
+    DOM.ghostChatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.stopPropagation();
+        doSendGhost();
+      }
+    });
+  }
+
+  if (DOM.toggleTimelineBtn && DOM.gameOverTimeline) {
+    DOM.toggleTimelineBtn.addEventListener('click', () => {
+      SFX.beep(520);
+      const isHidden = DOM.gameOverTimeline.style.display === 'none';
+      DOM.gameOverTimeline.style.display = isHidden ? 'block' : 'none';
+      DOM.toggleTimelineBtn.textContent = isHidden ? '📜 Hide Detailed Mission Log' : '📜 View Detailed Mission Log';
+    });
+  }
+
   NetEngine.init();
 
   // ============================================================================
@@ -2623,6 +3001,9 @@
     DOM.meetingOverlay.classList.remove('active');
     DOM.hud.style.display = 'flex';
     DOM.btnColorblindToggle.textContent = matchConfig.colorblindMode ? '👁️ CB: ON [C]' : '👁️ CB: OFF [C]';
+    if (DOM.hudPingBadge) {
+      DOM.hudPingBadge.style.display = NetEngine.wsConnected ? 'inline-block' : 'none';
+    }
 
     const human = getLocalPlayer();
     if (!human) return;
@@ -2664,6 +3045,14 @@
     activeLaserBursts = [];
     ventAnimations = [];
     matchEventsLog = [];
+    matchStats = {
+      killsByPlayer: {},
+      tasksDoneByPlayer: {},
+      votesReceivedByPlayer: {},
+      meetingsByPlayer: {},
+      sabotagesFixed: 0,
+      meetingsCalled: 0
+    };
     activeSabotage = null;
     DOM.sabotageBanner.style.display = 'none';
     sabotageCooldown = 12;
@@ -2927,6 +3316,7 @@
         SFX.taskDone();
         activeSabotage = null;
         DOM.sabotageBanner.style.display = 'none';
+        matchStats.sabotagesFixed = (matchStats.sabotagesFixed || 0) + 1;
         updateTaskHUD();
         if (activeModalKind === 'FIX') closeTaskModal();
         break;
@@ -3057,6 +3447,8 @@
     DOM.meetingOverlay.classList.remove('active');
     DOM.sabotageBanner.style.display = 'none';
     DOM.hud.style.display = 'none';
+    if (DOM.hudPingBadge) DOM.hudPingBadge.style.display = 'none';
+    if (DOM.ghostChatWrap) DOM.ghostChatWrap.style.display = 'none';
     DOM.lobbyOverlay.classList.add('active');
     state = GAME_STATES.LOBBY;
     if (notifyHost && NetEngine.inRoom && NetEngine.isHost()) {
@@ -3138,7 +3530,9 @@
   window.addEventListener('keydown', (e) => {
     if (document.activeElement === DOM.chatInputBox ||
         document.activeElement === DOM.playerNameInput ||
-        document.activeElement === DOM.mpCodeInput) {
+        document.activeElement === DOM.mpCodeInput ||
+        document.activeElement === DOM.lobbyChatInput ||
+        document.activeElement === DOM.ghostChatInput) {
       if (e.key === 'Enter' && state === GAME_STATES.EMERGENCY_MEETING) {
         sendHumanChatMessage();
       }
@@ -3361,6 +3755,7 @@
     SFX.kill();
     victim.alive = false;
     victim.timeOfDeath = performance.now();
+    matchStats.killsByPlayer[killer.id] = (matchStats.killsByPlayer[killer.id] || 0) + 1;
     killer.killCooldown = matchConfig.killCd * getEffectiveImpostorCdFactor();
     killer.bloodStepsRemaining = CONFIG.BLOOD_TRAIL_STEPS; // Step-based bloody footprints (#38)
 
@@ -3984,6 +4379,7 @@
             SFX.taskDone();
             activeSabotage = null;
             DOM.sabotageBanner.style.display = 'none';
+            matchStats.sabotagesFixed = (matchStats.sabotagesFixed || 0) + 1;
             if (NetEngine.inRoom) NetEngine.sendRpc('FIX_SABOTAGE', { sabType: 'LIGHTS' });
             closeTaskModal();
           }
@@ -4014,6 +4410,7 @@
             SFX.taskDone();
             activeSabotage = null;
             DOM.sabotageBanner.style.display = 'none';
+            matchStats.sabotagesFixed = (matchStats.sabotagesFixed || 0) + 1;
             if (NetEngine.inRoom) NetEngine.sendRpc('FIX_SABOTAGE', { sabType: 'REACTOR' });
             closeTaskModal();
             return;
@@ -4050,6 +4447,7 @@
           SFX.taskDone();
           activeSabotage = null;
           DOM.sabotageBanner.style.display = 'none';
+          matchStats.sabotagesFixed = (matchStats.sabotagesFixed || 0) + 1;
           updateTaskHUD();
           if (NetEngine.inRoom) NetEngine.sendRpc('FIX_SABOTAGE', { sabType: 'COMMS' });
           closeTaskModal();
@@ -4451,6 +4849,7 @@
           logMatchEvent(`${formatPlayerBadge(bot)} repaired ${repairedType} sabotage.`);
           activeSabotage = null;
           DOM.sabotageBanner.style.display = 'none';
+          matchStats.sabotagesFixed = (matchStats.sabotagesFixed || 0) + 1;
           updateTaskHUD();
           if (NetEngine.inRoom) NetEngine.sendRpc('FIX_SABOTAGE', { sabType: repairedType });
           bot.aiWaitTimer = 3;
@@ -4656,6 +5055,10 @@
   // 9. EMERGENCY MEETINGS, INTERACTIVE CHAT & EVIDENCE-BASED VOTING
   // ============================================================================
   function startEmergencyMeeting(caller, reportedBody, fromNetwork = false) {
+    matchStats.meetingsCalled = (matchStats.meetingsCalled || 0) + 1;
+    if (caller && caller.id !== undefined) {
+      matchStats.meetingsByPlayer[caller.id] = (matchStats.meetingsByPlayer[caller.id] || 0) + 1;
+    }
     if (!fromNetwork && NetEngine.inRoom) {
       NetEngine.sendRpc('CALL_MEETING', {
         callerId: caller.id,
@@ -5071,6 +5474,9 @@
     for (const rawTarget of Object.values(votesObj)) {
       const targetId = Number(rawTarget);
       counts.set(targetId, (counts.get(targetId) || 0) + 1);
+      if (targetId !== VOTE_SKIP && !isNaN(targetId)) {
+        matchStats.votesReceivedByPlayer[targetId] = (matchStats.votesReceivedByPlayer[targetId] || 0) + 1;
+      }
     }
 
     let highestId = VOTE_SKIP;
@@ -5176,6 +5582,137 @@
     DOM.gameOverTitle.textContent = title;
     DOM.gameOverTitle.style.color = title.includes('CREWMATES') ? '#38bdf8' : '#ef4444';
     DOM.gameOverReason.textContent = reason;
+
+    // MVP Awards & Mission Highlights
+    if (DOM.gameOverAwards) {
+      DOM.gameOverAwards.textContent = '';
+
+      let topKiller = null;
+      let maxKills = 0;
+      for (const p of players) {
+        const k = matchStats.killsByPlayer[p.id] || 0;
+        if (k > maxKills) {
+          maxKills = k;
+          topKiller = p;
+        }
+      }
+
+      let topTasker = null;
+      let maxTasks = 0;
+      for (const p of players) {
+        if (!p.isImpostor && p.tasks) {
+          const completedCount = p.tasks.filter(t => t.completed).length;
+          if (completedCount > maxTasks) {
+            maxTasks = completedCount;
+            topTasker = p;
+          }
+        }
+      }
+
+      let topSuspect = null;
+      let maxVotes = 0;
+      for (const p of players) {
+        const v = matchStats.votesReceivedByPlayer[p.id] || 0;
+        if (v > maxVotes) {
+          maxVotes = v;
+          topSuspect = p;
+        }
+      }
+
+      let topDetector = null;
+      let maxCalls = 0;
+      for (const p of players) {
+        const calls = matchStats.meetingsByPlayer[p.id] || 0;
+        if (calls > maxCalls) {
+          maxCalls = calls;
+          topDetector = p;
+        }
+      }
+      if (!topDetector) {
+        topDetector = players.find(p => !p.isImpostor && p.alive) || players[0];
+      }
+
+      const awards = [
+        {
+          icon: '🗡️',
+          title: 'Deadliest Assassin',
+          name: topKiller ? `${topKiller.name} (${maxKills} Kills)` : 'None (Pacifist)'
+        },
+        {
+          icon: '⭐',
+          title: 'Task Master',
+          name: topTasker ? `${topTasker.name} (${maxTasks} Done)` : 'None'
+        },
+        {
+          icon: '🔍',
+          title: 'Most Suspect',
+          name: topSuspect ? `${topSuspect.name} (${maxVotes} Votes)` : 'None'
+        },
+        {
+          icon: '🎖️',
+          title: title.includes('CREWMATES') ? 'Sherlock' : 'Mastermind',
+          name: topDetector ? `${topDetector.name}` : 'Crew Defense'
+        }
+      ];
+
+      for (const aw of awards) {
+        const card = document.createElement('div');
+        card.className = 'award-card';
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'award-icon';
+        iconDiv.textContent = aw.icon;
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'award-title';
+        titleDiv.textContent = aw.title;
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'award-name';
+        nameDiv.textContent = aw.name;
+        card.appendChild(iconDiv);
+        card.appendChild(titleDiv);
+        card.appendChild(nameDiv);
+        DOM.gameOverAwards.appendChild(card);
+      }
+    }
+
+    // Analytics Summary Bar
+    if (DOM.gameOverStatsBar) {
+      DOM.gameOverStatsBar.textContent = '';
+      let totalTasks = 0;
+      let doneTasks = 0;
+      for (const p of players) {
+        if (p.tasks) {
+          totalTasks += p.tasks.length;
+          doneTasks += p.tasks.filter(t => t.completed).length;
+        }
+      }
+      const totalKills = Object.values(matchStats.killsByPlayer).reduce((a, b) => a + b, 0);
+
+      const stats = [
+        { label: 'Tasks Done', val: `${doneTasks}/${totalTasks}` },
+        { label: 'Total Eliminations', val: `${totalKills}` },
+        { label: 'Sabotages Fixed', val: `${matchStats.sabotagesFixed}` },
+        { label: 'Meetings Held', val: `${matchStats.meetingsCalled}` }
+      ];
+
+      for (const s of stats) {
+        const chip = document.createElement('div');
+        chip.className = 'stat-chip';
+        const valDiv = document.createElement('div');
+        valDiv.className = 'stat-chip-val';
+        valDiv.textContent = s.val;
+        const lblDiv = document.createElement('div');
+        lblDiv.className = 'stat-chip-lbl';
+        lblDiv.textContent = s.label;
+        chip.appendChild(valDiv);
+        chip.appendChild(lblDiv);
+        DOM.gameOverStatsBar.appendChild(chip);
+      }
+    }
+
+    if (DOM.toggleTimelineBtn && DOM.gameOverTimeline) {
+      DOM.toggleTimelineBtn.textContent = '📜 View Detailed Mission Log';
+      DOM.gameOverTimeline.style.display = 'none';
+    }
 
     // XSS-safe Roster Summary (#36)
     DOM.gameOverRoster.textContent = '';
@@ -5806,6 +6343,11 @@
   // 13. MAIN UPDATE & RENDER LOOP
   // ============================================================================
   function update(dt) {
+    if (DOM.ghostChatWrap) {
+      const h = getLocalPlayer();
+      DOM.ghostChatWrap.style.display = (state === GAME_STATES.PLAYING && h && !h.alive) ? 'flex' : 'none';
+    }
+
     if (state === GAME_STATES.PLAYING || state === GAME_STATES.TASK_MODAL) {
       const human = getLocalPlayer();
       if (!human) return;

@@ -7,3 +7,4 @@ services:
     startCommand: node server.js
     healthCheckPath: /
     autoDeploy: true
+
