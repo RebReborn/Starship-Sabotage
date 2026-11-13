@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>STARSHIP SABOTAGE — 2D Social Deduction Game</title>
   <style>
     :root {
@@ -18,6 +18,7 @@
     * {
       box-sizing: border-box;
       user-select: none;
+      -webkit-user-select: none;
       margin: 0;
       padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -29,6 +30,8 @@
       overflow: hidden;
       background: var(--bg-dark);
       color: var(--text);
+      touch-action: none;
+      -webkit-touch-callout: none;
     }
 
     #gameCanvas {
@@ -36,6 +39,7 @@
       width: 100vw;
       height: 100vh;
       cursor: crosshair;
+      touch-action: none;
     }
 
     /* HUD OVERLAY */
@@ -1042,6 +1046,286 @@
       text-transform: uppercase;
       letter-spacing: 0.4px;
     }
+
+    /* VIRTUAL JOYSTICK FOR MOBILE / TOUCH */
+    .virtual-joystick {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      width: 125px;
+      height: 125px;
+      z-index: 25;
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .joystick-base {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(15, 23, 42, 0.75), rgba(30, 41, 59, 0.88));
+      border: 3px solid rgba(56, 189, 248, 0.7);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.35), inset 0 0 15px rgba(15, 23, 42, 0.85);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    .joystick-thumb {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #38bdf8, #0284c7);
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.9);
+      position: absolute;
+      pointer-events: none;
+      transform: translate(0px, 0px);
+      transition: transform 0.03s ease-out;
+    }
+
+    /* TOUCH ACTION CONTROLS */
+    .act-btn, .util-btn, .manifold-pad, .mp-btn, .swatch, .hat-item, .close-modal-btn {
+      touch-action: manipulation;
+    }
+    .close-modal-btn {
+      width: 38px;
+      height: 38px;
+      font-size: 16px;
+    }
+    #wireCanvas, .card canvas {
+      max-width: 100%;
+      height: auto;
+      touch-action: none;
+    }
+
+    /* RESPONSIVE & MOBILE / SMALL SCREEN STYLES */
+    @media (max-width: 900px) {
+      .lobby-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin: 12px 0;
+      }
+      .card {
+        padding: 20px 18px;
+        width: 96%;
+        max-height: 92vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+    }
+
+    @media (max-width: 768px) {
+      #hud {
+        padding: 10px 12px;
+      }
+      .hud-top {
+        gap: 8px;
+      }
+      .task-panel {
+        min-width: 190px;
+        max-width: 250px;
+        padding: 8px 10px;
+      }
+      .task-list {
+        font-size: 11.5px;
+      }
+      .role-badge {
+        padding: 6px 10px;
+      }
+      .role-badge .role-title {
+        font-size: 15px;
+      }
+      .role-badge .room-name {
+        font-size: 11px;
+      }
+      .hud-utils {
+        gap: 4px;
+      }
+      .util-btn {
+        padding: 4px 6px;
+        font-size: 10px;
+      }
+      .controls-hint {
+        display: none !important;
+      }
+      .action-dock {
+        gap: 8px;
+      }
+      .act-btn {
+        width: 64px;
+        height: 64px;
+        font-size: 11.5px;
+        border-width: 2.5px;
+      }
+      .act-btn .key-tag {
+        display: none;
+      }
+      .virtual-joystick {
+        bottom: 16px;
+        left: 16px;
+        width: 115px;
+        height: 115px;
+      }
+      .joystick-thumb {
+        width: 46px;
+        height: 46px;
+      }
+      .ghost-chat-wrap {
+        bottom: 150px;
+        left: 12px;
+        width: 250px;
+      }
+      .meeting-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .meeting-chat-box {
+        max-height: 110px;
+      }
+      .quick-chat-bar {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .award-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+      .stat-chip-val {
+        font-size: 13px;
+      }
+      .stat-chip-lbl {
+        font-size: 8.5px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .card {
+        padding: 16px 12px;
+      }
+      .card h1 {
+        font-size: 26px !important;
+      }
+      .card h2 {
+        font-size: 18px !important;
+      }
+      .task-panel {
+        min-width: 150px;
+        max-width: 195px;
+      }
+      .task-bar-outer {
+        height: 14px;
+      }
+      .task-bar-label {
+        font-size: 9px;
+      }
+      .act-btn {
+        width: 56px;
+        height: 56px;
+        font-size: 10px;
+      }
+      .virtual-joystick {
+        bottom: 12px;
+        left: 12px;
+        width: 105px;
+        height: 105px;
+      }
+      .joystick-thumb {
+        width: 42px;
+        height: 42px;
+      }
+      .ghost-chat-wrap {
+        bottom: 135px;
+        left: 8px;
+        width: 220px;
+        padding: 6px 8px;
+      }
+      .ghost-chat-log {
+        max-height: 60px;
+        font-size: 9.5px;
+      }
+      .mp-bar {
+        padding: 10px 12px;
+      }
+      .color-swatches {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+      }
+      .swatch {
+        height: 32px;
+      }
+      .hat-swatches {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 5px;
+        max-height: 115px;
+      }
+      .hat-item {
+        height: 35px;
+        font-size: 17px;
+      }
+      .manifold-pad {
+        height: 54px;
+        font-size: 22px;
+      }
+      .manifold-grid {
+        gap: 8px;
+        padding: 12px;
+      }
+      .award-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .stats-bar {
+        padding: 6px 4px;
+      }
+    }
+
+    /* MOBILE LANDSCAPE (Low height) */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #hud {
+        padding: 6px 12px;
+      }
+      .card {
+        padding: 12px 14px;
+        max-height: 95vh;
+      }
+      .task-panel {
+        padding: 6px 8px;
+        min-width: 170px;
+      }
+      .task-list {
+        max-height: 60px;
+        overflow-y: auto;
+      }
+      .virtual-joystick {
+        bottom: 8px;
+        left: 10px;
+        width: 95px;
+        height: 95px;
+      }
+      .joystick-thumb {
+        width: 38px;
+        height: 38px;
+      }
+      .act-btn {
+        width: 50px;
+        height: 50px;
+        font-size: 9px;
+      }
+      .ghost-chat-wrap {
+        bottom: 105px;
+        left: 8px;
+        width: 220px;
+      }
+      .lobby-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin: 8px 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1073,6 +1357,7 @@
         </div>
         <div class="hud-utils">
           <button class="util-btn" id="btnMapToggle">🗺️ MAP [TAB]</button>
+          <button class="util-btn" id="btnTouchToggle">🕹️ STICK: AUTO</button>
           <button class="util-btn" id="btnColorblindToggle">👁️ CB: OFF [C]</button>
           <button class="util-btn" id="btnAudioToggle">🔊 SFX: ON [M]</button>
           <span class="util-btn" id="hudPingBadge" style="cursor:default; display:none; background:#0f172a; border-color:#334155; color:#38bdf8; font-family:monospace; font-weight:800;">📶 --ms</span>
@@ -1092,6 +1377,13 @@
       <div style="display:flex; gap:4px;">
         <input type="text" id="ghostChatInput" class="lobby-chat-input" placeholder="Radio other ghosts..." maxlength="80" />
         <button class="mp-btn" id="ghostChatSendBtn" style="padding:4px 8px; font-size:10px;">SEND</button>
+      </div>
+    </div>
+
+    <!-- VIRTUAL JOYSTICK (TOUCH / MOBILE) -->
+    <div class="virtual-joystick" id="virtualJoystick" style="display:none;">
+      <div class="joystick-base" id="joystickBase">
+        <div class="joystick-thumb" id="joystickThumb"></div>
       </div>
     </div>
 
@@ -1549,7 +1841,11 @@
     gameOverReason: document.getElementById('gameOverReason'),
     gameOverRoster: document.getElementById('gameOverRoster'),
     gameOverTimeline: document.getElementById('gameOverTimeline'),
-    returnLobbyBtn: document.getElementById('returnLobbyBtn')
+    returnLobbyBtn: document.getElementById('returnLobbyBtn'),
+    btnTouchToggle: document.getElementById('btnTouchToggle'),
+    virtualJoystick: document.getElementById('virtualJoystick'),
+    joystickBase: document.getElementById('joystickBase'),
+    joystickThumb: document.getElementById('joystickThumb')
   };
 
   // Cross-browser rounded rectangle helper (#16, #19)
@@ -2030,6 +2326,7 @@
     const minDim = Math.min(canvas.width, canvas.height);
     camera.zoom = minDim < 720 ? Math.max(0.72, minDim / 780) : 1.0;
     visibilityCache.x = -9999;
+    if (typeof updateJoystickVisibility === 'function') updateJoystickVisibility();
   }
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
@@ -3033,6 +3330,7 @@
 
     updateTaskHUD();
     state = GAME_STATES.PLAYING;
+    updateJoystickVisibility();
   }
 
   function resetMatchWorldState() {
@@ -3449,6 +3747,7 @@
     DOM.hud.style.display = 'none';
     if (DOM.hudPingBadge) DOM.hudPingBadge.style.display = 'none';
     if (DOM.ghostChatWrap) DOM.ghostChatWrap.style.display = 'none';
+    if (DOM.virtualJoystick) DOM.virtualJoystick.style.display = 'none';
     DOM.lobbyOverlay.classList.add('active');
     state = GAME_STATES.LOBBY;
     if (notifyHost && NetEngine.inRoom && NetEngine.isHost()) {
@@ -3592,12 +3891,129 @@
     keys[e.key.toLowerCase()] = false;
   });
 
-  DOM.btnUse.addEventListener('click', handleUseAction);
-  DOM.btnReport.addEventListener('click', handleReportAction);
-  DOM.btnKill.addEventListener('click', handleKillAction);
-  DOM.btnVent.addEventListener('click', handleVentAction);
-  DOM.btnSabotage.addEventListener('click', handleSabotageAction);
-  DOM.btnSpecial.addEventListener('click', handleSpecialAbility);
+  // Virtual Joystick & Mobile Touch Controls
+  let joystickMode = 'AUTO'; // 'AUTO' | 'ON' | 'OFF'
+  let isTouchDetected = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia('(pointer: coarse)').matches;
+
+  window.addEventListener('touchstart', () => {
+    if (!isTouchDetected) {
+      isTouchDetected = true;
+      updateJoystickVisibility();
+    }
+  }, { passive: true, once: true });
+
+  const touchJoystick = {
+    active: false,
+    pointerId: null,
+    centerX: 0,
+    centerY: 0,
+    vx: 0,
+    vy: 0,
+    maxRadius: 46
+  };
+
+  function updateJoystickVisibility() {
+    if (!DOM.virtualJoystick) return;
+    if (state !== GAME_STATES.PLAYING && state !== GAME_STATES.TASK_MODAL) {
+      DOM.virtualJoystick.style.display = 'none';
+      return;
+    }
+    const shouldShow = (joystickMode === 'ON') || (joystickMode === 'AUTO' && (isTouchDetected || window.innerWidth <= 900));
+    DOM.virtualJoystick.style.display = shouldShow ? 'block' : 'none';
+  }
+
+  function initVirtualJoystick() {
+    const base = DOM.joystickBase;
+    const thumb = DOM.joystickThumb;
+    if (!base || !thumb) return;
+
+    function handlePointerDown(e) {
+      if (touchJoystick.active) return;
+      touchJoystick.active = true;
+      touchJoystick.pointerId = e.pointerId;
+      try { base.setPointerCapture(e.pointerId); } catch (_) {}
+      const rect = base.getBoundingClientRect();
+      touchJoystick.centerX = rect.left + rect.width / 2;
+      touchJoystick.centerY = rect.top + rect.height / 2;
+      updateJoystickPosition(e.clientX, e.clientY);
+    }
+
+    function handlePointerMove(e) {
+      if (!touchJoystick.active || e.pointerId !== touchJoystick.pointerId) return;
+      updateJoystickPosition(e.clientX, e.clientY);
+    }
+
+    function handlePointerUp(e) {
+      if (!touchJoystick.active || e.pointerId !== touchJoystick.pointerId) return;
+      resetJoystick();
+    }
+
+    function updateJoystickPosition(clientX, clientY) {
+      const dx = clientX - touchJoystick.centerX;
+      const dy = clientY - touchJoystick.centerY;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const clampedDist = Math.min(dist, touchJoystick.maxRadius);
+      const thumbX = Math.cos(angle) * clampedDist;
+      const thumbY = Math.sin(angle) * clampedDist;
+
+      thumb.style.transform = `translate(${thumbX}px, ${thumbY}px)`;
+      touchJoystick.vx = thumbX / touchJoystick.maxRadius;
+      touchJoystick.vy = thumbY / touchJoystick.maxRadius;
+    }
+
+    function resetJoystick() {
+      touchJoystick.active = false;
+      touchJoystick.pointerId = null;
+      touchJoystick.vx = 0;
+      touchJoystick.vy = 0;
+      thumb.style.transform = 'translate(0px, 0px)';
+    }
+
+    base.addEventListener('pointerdown', handlePointerDown);
+    base.addEventListener('pointermove', handlePointerMove);
+    base.addEventListener('pointerup', handlePointerUp);
+    base.addEventListener('pointercancel', handlePointerUp);
+  }
+  initVirtualJoystick();
+
+  if (DOM.btnTouchToggle) {
+    DOM.btnTouchToggle.addEventListener('click', () => {
+      SFX.beep(550);
+      if (joystickMode === 'AUTO') joystickMode = 'ON';
+      else if (joystickMode === 'ON') joystickMode = 'OFF';
+      else joystickMode = 'AUTO';
+      DOM.btnTouchToggle.textContent = `🕹️ STICK: ${joystickMode}`;
+      updateJoystickVisibility();
+    });
+  }
+
+  function bindActionBtn(btn, handler) {
+    if (!btn) return;
+    let handledTouch = false;
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+        if (!btn.disabled) {
+          handledTouch = true;
+          handler(e);
+        }
+      }
+    });
+    btn.addEventListener('click', (e) => {
+      if (handledTouch) {
+        handledTouch = false;
+        return;
+      }
+      if (!btn.disabled) handler(e);
+    });
+  }
+
+  bindActionBtn(DOM.btnUse, handleUseAction);
+  bindActionBtn(DOM.btnReport, handleReportAction);
+  bindActionBtn(DOM.btnKill, handleKillAction);
+  bindActionBtn(DOM.btnVent, handleVentAction);
+  bindActionBtn(DOM.btnSabotage, handleSabotageAction);
+  bindActionBtn(DOM.btnSpecial, handleSpecialAbility);
   DOM.closeTaskBtn.addEventListener('click', closeTaskModal);
   DOM.btnMapToggle.addEventListener('click', () => {
     if (state === GAME_STATES.PLAYING) {
@@ -4090,30 +4506,42 @@
       }
     }
 
-    c.addEventListener('mousedown', (e) => {
+    function getWirePos(ev) {
       const r = c.getBoundingClientRect();
-      const mx = e.clientX - r.left;
-      const my = e.clientY - r.top;
+      const scaleX = c.width / r.width;
+      const scaleY = c.height / r.height;
+      const clientX = ev.clientX !== undefined ? ev.clientX : (ev.touches && ev.touches[0] ? ev.touches[0].clientX : 0);
+      const clientY = ev.clientY !== undefined ? ev.clientY : (ev.touches && ev.touches[0] ? ev.touches[0].clientY : 0);
+      return {
+        x: (clientX - r.left) * scaleX,
+        y: (clientY - r.top) * scaleY
+      };
+    }
+
+    const onWireDown = (e) => {
+      const pos = getWirePos(e);
       for (const w of wires) {
-        if (!w.connected && Math.hypot(mx - w.x1, my - w.y1) < 28) {
+        if (!w.connected && Math.hypot(pos.x - w.x1, pos.y - w.y1) < 36) {
           draggingWire = w;
+          if (e.preventDefault) e.preventDefault();
           break;
         }
       }
-    });
+    };
 
-    c.addEventListener('mousemove', (e) => {
+    const onWireMove = (e) => {
       if (!draggingWire) return;
-      const r = c.getBoundingClientRect();
-      draggingWire.x2 = e.clientX - r.left;
-      draggingWire.y2 = e.clientY - r.top;
+      if (e.preventDefault) e.preventDefault();
+      const pos = getWirePos(e);
+      draggingWire.x2 = pos.x;
+      draggingWire.y2 = pos.y;
       drawWires();
-    });
+    };
 
-    const onUp = () => {
+    const onWireUp = () => {
       if (!draggingWire) return;
       const targetPort = rightPorts[draggingWire.targetIdx];
-      if (Math.hypot(draggingWire.x2 - targetPort.x, draggingWire.y2 - targetPort.y) < 34) {
+      if (Math.hypot(draggingWire.x2 - targetPort.x, draggingWire.y2 - targetPort.y) < 40) {
         draggingWire.x2 = targetPort.x;
         draggingWire.y2 = targetPort.y;
         draggingWire.connected = true;
@@ -4129,8 +4557,22 @@
         completeTaskWithDelay(task);
       }
     };
-    window.addEventListener('mouseup', onUp);
-    activeModalCleanup = () => window.removeEventListener('mouseup', onUp);
+
+    c.addEventListener('pointerdown', onWireDown);
+    window.addEventListener('pointermove', onWireMove);
+    window.addEventListener('pointerup', onWireUp);
+    c.addEventListener('touchstart', onWireDown, { passive: false });
+    window.addEventListener('touchmove', onWireMove, { passive: false });
+    window.addEventListener('touchend', onWireUp);
+
+    activeModalCleanup = () => {
+      c.removeEventListener('pointerdown', onWireDown);
+      window.removeEventListener('pointermove', onWireMove);
+      window.removeEventListener('pointerup', onWireUp);
+      c.removeEventListener('touchstart', onWireDown);
+      window.removeEventListener('touchmove', onWireMove);
+      window.removeEventListener('touchend', onWireUp);
+    };
 
     drawWires();
   }
@@ -4198,10 +4640,15 @@
     }
     for (let i = 0; i < 4; i++) spawnRock();
 
-    c.addEventListener('mousedown', (e) => {
+    const onFireLaser = (e) => {
+      if (e.preventDefault) e.preventDefault();
       const rect = c.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      const scaleX = c.width / rect.width;
+      const scaleY = c.height / rect.height;
+      const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+      const mx = (clientX - rect.left) * scaleX;
+      const my = (clientY - rect.top) * scaleY;
       SFX.laser();
       lasers.push({ x: mx, y: my, t: 0.15 });
 
@@ -4219,7 +4666,7 @@
       NetEngine.sendRpc('LASER_BURST', { playerId: human.id, y2, completed: false });
 
       for (let i = rocks.length - 1; i >= 0; i--) {
-        if (Math.hypot(mx - rocks[i].x, my - rocks[i].y) <= rocks[i].r + 10) {
+        if (Math.hypot(mx - rocks[i].x, my - rocks[i].y) <= rocks[i].r + 14) {
           rocks.splice(i, 1);
           destroyed++;
           spawnRock();
@@ -4231,7 +4678,10 @@
           break;
         }
       }
-    });
+    };
+
+    c.addEventListener('pointerdown', onFireLaser);
+    c.addEventListener('touchstart', onFireLaser, { passive: false });
 
     function loop() {
       actx.clearRect(0, 0, c.width, c.height);
@@ -4279,7 +4729,11 @@
       animId = requestAnimationFrame(loop);
     }
     animId = requestAnimationFrame(loop);
-    activeModalCleanup = () => cancelAnimationFrame(animId);
+    activeModalCleanup = () => {
+      cancelAnimationFrame(animId);
+      c.removeEventListener('pointerdown', onFireLaser);
+      c.removeEventListener('touchstart', onFireLaser);
+    };
   }
 
   // Mini-Game 4: Swipe Security ID Card
@@ -4294,7 +4748,7 @@
     const track = document.createElement('div');
     track.style.cssText = 'height:74px; background:#1e293b; border-radius:8px; position:relative; border:2px dashed #64748b;';
     const card = document.createElement('div');
-    card.style.cssText = 'width:96px; height:62px; background:linear-gradient(135deg,#38bdf8,#1d4ed8); border:2px solid #fff; border-radius:8px; position:absolute; top:4px; left:6px; cursor:grab; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12px; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+    card.style.cssText = 'width:96px; height:62px; background:linear-gradient(135deg,#38bdf8,#1d4ed8); border:2px solid #fff; border-radius:8px; position:absolute; top:4px; left:6px; cursor:grab; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12px; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.5); touch-action:none;';
     card.textContent = 'CREW ID';
     track.appendChild(card);
     wrap.appendChild(track);
@@ -4304,16 +4758,19 @@
     let startTime = 0;
     let currentX = 6;
 
-    card.addEventListener('mousedown', () => {
+    const onStartDrag = (e) => {
+      if (e.preventDefault) e.preventDefault();
       dragging = true;
       startTime = performance.now();
       SFX.beep(500);
-    });
+    };
 
     const onMove = (e) => {
       if (!dragging) return;
+      if (e.preventDefault) e.preventDefault();
       const rect = track.getBoundingClientRect();
-      currentX = Math.max(6, Math.min(315, e.clientX - rect.left - 48));
+      const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      currentX = Math.max(6, Math.min(315, clientX - rect.left - 48));
       card.style.left = currentX + 'px';
     };
 
@@ -4325,11 +4782,11 @@
         SFX.error();
         screen.style.color = '#fca5a5';
         screen.textContent = 'BAD READ — SWIPE ALL THE WAY ACROSS';
-      } else if (elapsed < 0.35) {
+      } else if (elapsed < 0.32) {
         SFX.error();
         screen.style.color = '#fca5a5';
         screen.textContent = 'TOO FAST! TRY A STEADIER SWIPE';
-      } else if (elapsed > 1.35) {
+      } else if (elapsed > 1.45) {
         SFX.error();
         screen.style.color = '#fca5a5';
         screen.textContent = 'TOO SLOW! SWIPE WITH CONFIDENCE';
@@ -4343,11 +4800,20 @@
       card.style.left = '6px';
     };
 
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    card.addEventListener('pointerdown', onStartDrag);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    card.addEventListener('touchstart', onStartDrag, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+
     activeModalCleanup = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      card.removeEventListener('pointerdown', onStartDrag);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      card.removeEventListener('touchstart', onStartDrag);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
     };
   }
 
@@ -4397,9 +4863,13 @@
       let holding = false;
       let animId = null;
 
-      pad.addEventListener('mousedown', () => { holding = true; SFX.beep(420); });
+      pad.addEventListener('pointerdown', (e) => { e.preventDefault(); holding = true; SFX.beep(420); });
+      pad.addEventListener('touchstart', (e) => { e.preventDefault(); holding = true; SFX.beep(420); }, { passive: false });
       const stopHold = () => { holding = false; };
+      window.addEventListener('pointerup', stopHold);
       window.addEventListener('mouseup', stopHold);
+      window.addEventListener('touchend', stopHold);
+      window.addEventListener('touchcancel', stopHold);
 
       function step() {
         if (holding) {
@@ -4425,7 +4895,10 @@
       animId = requestAnimationFrame(step);
       activeModalCleanup = () => {
         cancelAnimationFrame(animId);
+        window.removeEventListener('pointerup', stopHold);
         window.removeEventListener('mouseup', stopHold);
+        window.removeEventListener('touchend', stopHold);
+        window.removeEventListener('touchcancel', stopHold);
       };
     } else if (type === 'COMMS') {
       const body = openModalShell('📡 RESTORE COMMS FREQUENCY', 'Drag the frequency dial until the signal lock reaches 100%.', 'FIX');
@@ -5074,6 +5547,7 @@
     activeSabotage = null;
     DOM.sabotageBanner.style.display = 'none';
     updateTaskHUD();
+    if (DOM.virtualJoystick) DOM.virtualJoystick.style.display = 'none';
     state = GAME_STATES.EMERGENCY_MEETING;
 
     logMatchEvent(reportedBody
@@ -5575,6 +6049,7 @@
   function triggerGameOver(title, reason) {
     clearMeetingTimeouts();
     closeTaskModal();
+    if (DOM.virtualJoystick) DOM.virtualJoystick.style.display = 'none';
     state = GAME_STATES.GAME_OVER;
     DOM.meetingOverlay.classList.remove('active');
     DOM.gameOverOverlay.classList.add('active');
@@ -6437,10 +6912,19 @@
         if (keys['a'] || keys['arrowleft']) mx -= 1;
         if (keys['d'] || keys['arrowright']) mx += 1;
 
+        if (touchJoystick.active) {
+          mx += touchJoystick.vx;
+          my += touchJoystick.vy;
+          if (Math.abs(touchJoystick.vx) > 0.15) {
+            human.facing = touchJoystick.vx > 0 ? 1 : -1;
+          }
+        }
+
         const speedMult = (!human.alive) ? CONFIG.GHOST_SPEED_MULT : 1.0;
         if (mx !== 0 || my !== 0) {
           const len = Math.hypot(mx, my);
-          moveEntity(human, (mx / len) * human.speed * speedMult, (my / len) * human.speed * speedMult, dt);
+          const factor = touchJoystick.active ? Math.min(1, len) : 1;
+          moveEntity(human, (mx / len) * factor * human.speed * speedMult, (my / len) * factor * human.speed * speedMult, dt);
         } else {
           moveEntity(human, 0, 0, dt);
         }
